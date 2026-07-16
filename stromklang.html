@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>Stromklang — Motorsound für dein E-Auto</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0E13;
+    --panel:#12161E;
+    --panel-2:#171C26;
+    --line:#242C38;
+    --text:#E9EDF3;
+    --dim:#8A94A3;
+    --amber:#FFB454;
+    --amber-deep:#E8842A;
+    --red:#FF4D4D;
+    --ok:#63D68A;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:"IBM Plex Sans",system-ui,sans-serif;
+    display:flex;flex-direction:column;align-items:center;
+    min-height:100dvh;
+    padding:16px 16px calc(16px + env(safe-area-inset-bottom));
+    overflow-x:hidden;
+  }
+  .disp{font-family:"Chakra Petch","IBM Plex Sans",sans-serif}
+
+  /* ---------- Header ---------- */
+  header{
+    width:100%;max-width:520px;
+    display:flex;align-items:baseline;justify-content:space-between;
+    padding:4px 2px 14px;
+  }
+  .logo{font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:20px;letter-spacing:.14em;text-transform:uppercase}
+  .logo em{font-style:normal;color:var(--amber)}
+  .status{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:6px}
+  .status .dot{width:8px;height:8px;border-radius:50%;background:#3a4350;transition:background .3s}
+  .status.live .dot{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  .status.err .dot{background:var(--red)}
+
+  /* ---------- Gauge ---------- */
+  .gauge-wrap{
+    width:100%;max-width:520px;
+    background:linear-gradient(180deg,var(--panel-2),var(--panel));
+    border:1px solid var(--line);
+    border-radius:20px;
+    padding:22px 18px 16px;
+    position:relative;
+  }
+  .gauge{width:min(78vw,340px);margin:0 auto;display:block}
+  .speed-num{
+    position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);
+    text-align:center;pointer-events:none;
+  }
+  .speed-num .val{font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:clamp(52px,15vw,72px);line-height:1;font-variant-numeric:tabular-nums}
+  .speed-num .unit{font-size:13px;color:var(--dim);letter-spacing:.25em;text-transform:uppercase;margin-top:2px}
+
+  .subrow{
+    display:flex;justify-content:space-between;align-items:flex-end;
+    margin-top:6px;padding:0 6px;
+  }
+  .gearbox{font-family:"Chakra Petch",sans-serif}
+  .gearbox .g{font-size:34px;font-weight:700;color:var(--amber)}
+  .gearbox .lbl{font-size:11px;color:var(--dim);letter-spacing:.2em;text-transform:uppercase;display:block}
+  .rpmbox{text-align:right}
+  .rpmbox .v{font-family:"Chakra Petch",sans-serif;font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
+  .rpmbox .lbl{font-size:11px;color:var(--dim);letter-spacing:.2em;text-transform:uppercase}
+
+  .rpm-ribbon{
+    margin-top:10px;height:10px;border-radius:5px;background:#1B212C;overflow:hidden;position:relative;
+  }
+  .rpm-ribbon .fill{
+    height:100%;width:0%;
+    background:linear-gradient(90deg,var(--amber-deep),var(--amber) 70%,var(--red));
+    border-radius:5px;
+    transition:width .08s linear;
+  }
+
+  /* ---------- Sections ---------- */
+  section{width:100%;max-width:520px;margin-top:14px}
+  .card{
+    background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;
+  }
+  .card h2{
+    font-size:11px;font-weight:600;color:var(--dim);
+    letter-spacing:.22em;text-transform:uppercase;margin-bottom:10px;
+    font-family:"Chakra Petch",sans-serif;
+  }
+
+  /* sound chips */
+  .chips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .chip{
+    border:1px solid var(--line);background:var(--panel-2);color:var(--text);
+    border-radius:12px;padding:12px 6px;cursor:pointer;text-align:center;
+    font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:14px;letter-spacing:.04em;
+    transition:border-color .2s,background .2s,color .2s;
+  }
+  .chip small{display:block;font-family:"IBM Plex Sans",sans-serif;font-weight:400;font-size:11px;color:var(--dim);margin-top:3px;letter-spacing:0}
+  .chip.active{border-color:var(--amber);background:rgba(255,180,84,.08);color:var(--amber)}
+  .chip.active small{color:var(--amber-deep)}
+
+  /* mode toggle */
+  .modes{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+  .mode-btn{
+    border:1px solid var(--line);background:var(--panel-2);color:var(--dim);
+    border-radius:12px;padding:10px;cursor:pointer;font-size:13px;font-weight:500;
+    transition:all .2s;font-family:"IBM Plex Sans",sans-serif;
+  }
+  .mode-btn.active{border-color:var(--amber);color:var(--text);background:rgba(255,180,84,.07)}
+
+  /* pedal */
+  .pedal{
+    width:100%;height:88px;border-radius:14px;border:1px solid var(--line);
+    background:linear-gradient(180deg,#1A202B,#12161E);
+    color:var(--dim);font-family:"Chakra Petch",sans-serif;font-weight:700;
+    font-size:15px;letter-spacing:.2em;text-transform:uppercase;cursor:pointer;
+    user-select:none;-webkit-user-select:none;touch-action:none;
+    transition:transform .05s;
+  }
+  .pedal:active,.pedal.pressed{transform:scale(.985);border-color:var(--amber);color:var(--amber)}
+  .gps-hint{font-size:13px;color:var(--dim);line-height:1.55}
+  .gps-hint b{color:var(--text);font-weight:500}
+
+  /* sliders */
+  .slider-row{display:flex;align-items:center;gap:12px;margin-top:4px}
+  .slider-row label{font-size:12px;color:var(--dim);width:86px;flex:none}
+  .slider-row output{font-size:12px;color:var(--text);width:44px;text-align:right;font-variant-numeric:tabular-nums}
+  input[type=range]{
+    flex:1;appearance:none;-webkit-appearance:none;height:6px;border-radius:3px;
+    background:#1B212C;outline:none;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;appearance:none;width:22px;height:22px;border-radius:50%;
+    background:var(--amber);border:3px solid var(--bg);cursor:pointer;
+  }
+  input[type=range]::-moz-range-thumb{
+    width:18px;height:18px;border-radius:50%;background:var(--amber);border:3px solid var(--bg);cursor:pointer;
+  }
+
+  /* start button */
+  .start{
+    width:100%;max-width:520px;margin-top:14px;
+    padding:18px;border-radius:16px;border:none;cursor:pointer;
+    font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:17px;
+    letter-spacing:.24em;text-transform:uppercase;
+    background:var(--amber);color:#141005;
+    transition:filter .2s;
+  }
+  .start:hover{filter:brightness(1.06)}
+  .start.on{background:transparent;color:var(--red);border:1px solid var(--red)}
+
+  footer{
+    max-width:520px;margin-top:16px;font-size:11.5px;color:#5C6675;
+    text-align:center;line-height:1.6;padding:0 8px;
+  }
+  @media (prefers-reduced-motion:reduce){
+    .rpm-ribbon .fill{transition:none}
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Strom<em>klang</em></div>
+  <div class="status" id="status"><span class="dot"></span><span id="statusTxt">bereit</span></div>
+</header>
+
+<div class="gauge-wrap">
+  <svg class="gauge" viewBox="0 0 200 130" aria-hidden="true">
+    <!-- ticks -->
+    <g id="ticks" stroke="#39424F" stroke-width="2"></g>
+    <!-- track -->
+    <path d="M 20 115 A 80 80 0 1 1 180 115" fill="none" stroke="#1B212C" stroke-width="10" stroke-linecap="round"/>
+    <!-- progress -->
+    <path id="arc" d="M 20 115 A 80 80 0 1 1 180 115" fill="none" stroke="url(#grad)" stroke-width="10" stroke-linecap="round"/>
+    <defs>
+      <linearGradient id="grad" x1="0" y1="1" x2="1" y2="0">
+        <stop offset="0%" stop-color="#E8842A"/>
+        <stop offset="70%" stop-color="#FFB454"/>
+        <stop offset="100%" stop-color="#FFD9A0"/>
+      </linearGradient>
+    </defs>
+  </svg>
+  <div class="speed-num">
+    <div class="val disp" id="speedVal">0</div>
+    <div class="unit">km/h</div>
+  </div>
+  <div class="subrow">
+    <div class="gearbox"><span class="lbl">Gang</span><span class="g" id="gear">N</span></div>
+    <div class="rpmbox"><div class="v" id="rpmVal">0</div><div class="lbl">U/min</div></div>
+  </div>
+  <div class="rpm-ribbon"><div class="fill" id="rpmFill"></div></div>
+</div>
+
+<section>
+  <div class="card">
+    <h2>Sound</h2>
+    <div class="chips" id="chips">
+      <button class="chip active" data-sound="v8">V8<small>Muscle-Car</small></button>
+      <button class="chip" data-sound="jet">Turbine<small>Jet-Triebwerk</small></button>
+      <button class="chip" data-sound="warp">Warp<small>Sci-Fi-Antrieb</small></button>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="card">
+    <h2>Antrieb</h2>
+    <div class="modes">
+      <button class="mode-btn active" id="modeDemo">🎮 Demo-Pedal</button>
+      <button class="mode-btn" id="modeGps">📡 GPS (echte Fahrt)</button>
+    </div>
+    <div id="demoPanel">
+      <button class="pedal" id="pedal">Gas halten</button>
+    </div>
+    <div id="gpsPanel" style="display:none">
+      <p class="gps-hint">
+        Nutzt die <b>echte Geschwindigkeit</b> deines Handys über GPS.
+        Erlaube den Standortzugriff und lass den Bildschirm an —
+        manche Browser pausieren Audio &amp; Sensoren im Hintergrund.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="card">
+    <h2>Einstellungen</h2>
+    <div class="slider-row">
+      <label for="vol">Lautstärke</label>
+      <input type="range" id="vol" min="0" max="100" value="70">
+      <output id="volOut">70%</output>
+    </div>
+    <div class="slider-row">
+      <label for="vmax">V-max Skala</label>
+      <input type="range" id="vmax" min="60" max="260" step="10" value="160">
+      <output id="vmaxOut">160</output>
+    </div>
+  </div>
+</section>
+
+<button class="start disp" id="startBtn">Start</button>
+
+<footer>
+  Läuft komplett lokal in deinem Browser — kein Konto, kein Abo, keine Datenübertragung.
+  Sound wird live per Web-Audio synthetisiert. Bedienung nur im Stand, Sicherheit geht vor. 🚗⚡
+</footer>
+
+<script>
+(() => {
+  "use strict";
+
+  /* ============ State ============ */
+  const S = {
+    running:false,
+    mode:"demo",            // demo | gps
+    sound:"v8",             // v8 | jet | warp
+    targetSpeed:0,          // km/h
+    speed:0,                // smoothed km/h
+    accel:0,                // km/h per second (smoothed)
+    rpm:900,
+    gear:0,                 // 0 = N
+    vmax:160,
+    volume:0.7,
+    pedalDown:false,
+    lastPos:null,
+    watchId:null,
+    wakeLock:null,
+  };
+
+  // virtuelle Gänge: [von km/h, bis km/h]
+  const GEARS = [[0,22],[22,42],[42,68],[68,98],[98,132],[132,400]];
+  const RPM_IDLE = 900, RPM_MAX = 6800, RPM_SHIFT_LOW = 1400;
+
+  /* ============ DOM ============ */
+  const $ = id => document.getElementById(id);
+  const el = {
+    speedVal:$("speedVal"), rpmVal:$("rpmVal"), rpmFill:$("rpmFill"),
+    gear:$("gear"), arc:$("arc"), ticks:$("ticks"),
+    status:$("status"), statusTxt:$("statusTxt"),
+    startBtn:$("startBtn"), pedal:$("pedal"),
+    chips:$("chips"), modeDemo:$("modeDemo"), modeGps:$("modeGps"),
+    demoPanel:$("demoPanel"), gpsPanel:$("gpsPanel"),
+    vol:$("vol"), volOut:$("volOut"), vmax:$("vmax"), vmaxOut:$("vmaxOut"),
+  };
+
+  /* ============ Gauge ============ */
+  const ARC_LEN = el.arc.getTotalLength();
+  el.arc.style.strokeDasharray = ARC_LEN;
+  el.arc.style.strokeDashoffset = ARC_LEN;
+
+  // Tick-Striche zeichnen (13 Stück über 270°)
+  (function drawTicks(){
+    const cx=100, cy=100, r1=88, r2=94, start=135, sweep=270, n=13;
+    let html="";
+    for(let i=0;i<n;i++){
+      const a=(start + sweep*i/(n-1)) * Math.PI/180;
+      const x1=cx+Math.cos(a)*r1, y1=cy+Math.sin(a)*r1;
+      const x2=cx+Math.cos(a)*r2, y2=cy+Math.sin(a)*r2;
+      html+=`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}"/>`;
+    }
+    el.ticks.innerHTML=html;
+  })();
+
+  function setGauge(speed){
+    const f = Math.min(1, speed / S.vmax);
+    el.arc.style.strokeDashoffset = ARC_LEN * (1 - f);
+  }
+
+  /* ============ Audio-Engine ============ */
+  let ctx=null, master=null, engine=null;
+
+  function makeNoiseBuffer(c){
+    const len = c.sampleRate * 2;
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for(let i=0;i<len;i++) d[i]=Math.random()*2-1;
+    return buf;
+  }
+
+  /* Jeder Sound liefert: {update(rpm,speed,throttle,t), stop()} */
+
+  function buildV8(c, out){
+    const fire = c.createOscillator(); fire.type="sawtooth";        // Zündfrequenz
+    const sub  = c.createOscillator(); sub.type="sawtooth";         // Suboktave
+    const harm = c.createOscillator(); harm.type="square";          // Obertöne
+    harm.detune.value = 8;
+
+    const lopeLfo = c.createOscillator(); lopeLfo.type="sine"; lopeLfo.frequency.value=7;
+    const lopeAmt = c.createGain(); lopeAmt.gain.value=4;
+    lopeLfo.connect(lopeAmt); lopeAmt.connect(fire.frequency);
+
+    const noise = c.createBufferSource(); noise.buffer=makeNoiseBuffer(c); noise.loop=true;
+    const nFilt = c.createBiquadFilter(); nFilt.type="lowpass"; nFilt.frequency.value=180; nFilt.Q.value=.5;
+    const nGain = c.createGain(); nGain.gain.value=.25;
+
+    const gFire=c.createGain(); gFire.gain.value=.42;
+    const gSub =c.createGain(); gSub.gain.value=.5;
+    const gHarm=c.createGain(); gHarm.gain.value=.10;
+
+    const body = c.createBiquadFilter(); body.type="lowpass"; body.frequency.value=500; body.Q.value=1.2;
+    const growl= c.createBiquadFilter(); growl.type="peaking"; growl.frequency.value=140; growl.gain.value=7; growl.Q.value=1;
+
+    const mix=c.createGain(); mix.gain.value=0;
+
+    fire.connect(gFire); sub.connect(gSub); harm.connect(gHarm);
+    noise.connect(nFilt); nFilt.connect(nGain);
+    [gFire,gSub,gHarm,nGain].forEach(n=>n.connect(growl));
+    growl.connect(body); body.connect(mix); mix.connect(out);
+
+    [fire,sub,harm,lopeLfo,noise].forEach(n=>n.start());
+
+    return {
+      update(rpm, speed, thr, t){
+        const f = rpm/60*4;                       // V8, 4-Takt → 4 Zündungen/U
+        fire.frequency.setTargetAtTime(f, t, .05);
+        sub.frequency.setTargetAtTime(f/2, t, .05);
+        harm.frequency.setTargetAtTime(f*2, t, .05);
+        lopeAmt.gain.setTargetAtTime(rpm<1400 ? 6 : 0.5, t, .2);
+        body.frequency.setTargetAtTime(300 + rpm*0.55 + thr*900, t, .08);
+        nFilt.frequency.setTargetAtTime(120 + rpm*0.25, t, .1);
+        const load = .55 + .45*Math.min(1,thr*1.6);
+        mix.gain.setTargetAtTime(load*(.5 + .5*Math.min(1,rpm/RPM_MAX)), t, .07);
+      },
+      stop(){ [fire,sub,harm,lopeLfo,noise].forEach(n=>{try{n.stop()}catch(e){}}); }
+    };
+  }
+
+  function buildJet(c, out){
+    const noise=c.createBufferSource(); noise.buffer=makeNoiseBuffer(c); noise.loop=true;
+    const bp=c.createBiquadFilter(); bp.type="bandpass"; bp.frequency.value=350; bp.Q.value=.9;
+    const hiss=c.createBiquadFilter(); hiss.type="highpass"; hiss.frequency.value=2500;
+    const gBp=c.createGain(); gBp.gain.value=.8;
+    const gHiss=c.createGain(); gHiss.gain.value=0;
+
+    const whine=c.createOscillator(); whine.type="sawtooth";
+    const wFilt=c.createBiquadFilter(); wFilt.type="lowpass"; wFilt.frequency.value=3000;
+    const gWhine=c.createGain(); gWhine.gain.value=.03;
+
+    const mix=c.createGain(); mix.gain.value=0;
+
+    noise.connect(bp); bp.connect(gBp); gBp.connect(mix);
+    noise.connect(hiss); hiss.connect(gHiss); gHiss.connect(mix);
+    whine.connect(wFilt); wFilt.connect(gWhine); gWhine.connect(mix);
+    mix.connect(out);
+    noise.start(); whine.start();
+
+    return {
+      update(rpm, speed, thr, t){
+        const p = Math.min(1, speed/S.vmax);
+        bp.frequency.setTargetAtTime(280 + 2400*p, t, .15);
+        whine.frequency.setTargetAtTime(500 + 3200*p + thr*400, t, .12);
+        gWhine.gain.setTargetAtTime(.02 + .06*p, t, .15);
+        gHiss.gain.setTargetAtTime(.05 + .3*p + .2*thr, t, .12);
+        mix.gain.setTargetAtTime(.35 + .65*Math.max(p, thr*.5), t, .12);
+      },
+      stop(){ try{noise.stop()}catch(e){} try{whine.stop()}catch(e){} }
+    };
+  }
+
+  function buildWarp(c, out){
+    const o1=c.createOscillator(); o1.type="triangle";
+    const o2=c.createOscillator(); o2.type="triangle"; o2.detune.value=-12;
+    const o3=c.createOscillator(); o3.type="sine";
+    const vib=c.createOscillator(); vib.type="sine"; vib.frequency.value=5.5;
+    const vibAmt=c.createGain(); vibAmt.gain.value=6;
+    vib.connect(vibAmt); vibAmt.connect(o3.frequency);
+
+    const shimmer=c.createBufferSource(); shimmer.buffer=makeNoiseBuffer(c); shimmer.loop=true;
+    const shFilt=c.createBiquadFilter(); shFilt.type="bandpass"; shFilt.frequency.value=4000; shFilt.Q.value=8;
+    const gSh=c.createGain(); gSh.gain.value=.02;
+
+    const g1=c.createGain(); g1.gain.value=.28;
+    const g2=c.createGain(); g2.gain.value=.28;
+    const g3=c.createGain(); g3.gain.value=.12;
+    const filt=c.createBiquadFilter(); filt.type="lowpass"; filt.frequency.value=900; filt.Q.value=2;
+    const mix=c.createGain(); mix.gain.value=0;
+
+    o1.connect(g1); o2.connect(g2); o3.connect(g3);
+    shimmer.connect(shFilt); shFilt.connect(gSh); gSh.connect(mix);
+    [g1,g2,g3].forEach(g=>g.connect(filt));
+    filt.connect(mix); mix.connect(out);
+    [o1,o2,o3,vib,shimmer].forEach(n=>n.start());
+
+    return {
+      update(rpm, speed, thr, t){
+        const p=Math.min(1, speed/S.vmax);
+        const base=55 + 320*p;
+        o1.frequency.setTargetAtTime(base, t, .12);
+        o2.frequency.setTargetAtTime(base*1.5, t, .12);
+        o3.frequency.setTargetAtTime(base*4, t, .12);
+        filt.frequency.setTargetAtTime(600 + 3000*p + thr*1500, t, .12);
+        shFilt.frequency.setTargetAtTime(3000 + 4000*p, t, .2);
+        gSh.gain.setTargetAtTime(.01+.05*p, t, .2);
+        mix.gain.setTargetAtTime(.3 + .7*Math.max(p*.9, thr*.4), t, .12);
+      },
+      stop(){ [o1,o2,o3,vib,shimmer].forEach(n=>{try{n.stop()}catch(e){}}); }
+    };
+  }
+
+  const BUILDERS = { v8:buildV8, jet:buildJet, warp:buildWarp };
+
+  function startAudio(){
+    if(!ctx){
+      ctx = new (window.AudioContext||window.webkitAudioContext)();
+      master = ctx.createGain();
+      const comp = ctx.createDynamicsCompressor();
+      master.connect(comp); comp.connect(ctx.destination);
+    }
+    ctx.resume();
+    master.gain.setTargetAtTime(S.volume, ctx.currentTime, .1);
+    swapEngine(S.sound);
+  }
+
+  function swapEngine(name){
+    if(!ctx) return;
+    if(engine){ engine.stop(); engine=null; }
+    engine = BUILDERS[name](ctx, master);
+  }
+
+  function stopAudio(){
+    if(engine){ engine.stop(); engine=null; }
+    if(master && ctx) master.gain.setTargetAtTime(0, ctx.currentTime, .1);
+  }
+
+  /* ============ Fahrphysik / Loop ============ */
+  let lastT = performance.now();
+  function loop(now){
+    const dt = Math.min(.1,(now-lastT)/1000); lastT=now;
+
+    if(S.running){
+      // Demo-Modus: Pedal beschleunigt, sonst rollt's aus
+      if(S.mode==="demo"){
+        if(S.pedalDown) S.targetSpeed = Math.min(S.vmax, S.targetSpeed + 34*dt);
+        else            S.targetSpeed = Math.max(0, S.targetSpeed - 22*dt);
+      }
+      const prev = S.speed;
+      S.speed += (S.targetSpeed - S.speed) * Math.min(1, dt*3.5);
+      if(S.speed<0.3 && S.targetSpeed<0.3) S.speed=0;
+
+      const rawAccel = (S.speed - prev)/Math.max(dt,.001);
+      S.accel += (rawAccel - S.accel)*Math.min(1,dt*4);
+      const throttle = Math.max(0, Math.min(1, S.accel/14 + (S.pedalDown?.35:0)));
+
+      // Gang & Drehzahl
+      if(S.speed<1){ S.gear=0; S.rpm += (RPM_IDLE - S.rpm)*dt*4; }
+      else{
+        let gi = GEARS.findIndex(g=>S.speed>=g[0] && S.speed<g[1]);
+        if(gi<0) gi=GEARS.length-1;
+        S.gear=gi+1;
+        const [lo,hi]=GEARS[gi];
+        const frac=(S.speed-lo)/(hi-lo);
+        const target = RPM_SHIFT_LOW + frac*(RPM_MAX-800-RPM_SHIFT_LOW) + throttle*500;
+        S.rpm += (target - S.rpm)*Math.min(1,dt*5);
+      }
+      S.rpm = Math.max(RPM_IDLE*.9, Math.min(RPM_MAX, S.rpm));
+
+      if(engine && ctx) engine.update(S.rpm, S.speed, throttle, ctx.currentTime);
+    }
+
+    // UI
+    el.speedVal.textContent = Math.round(S.speed);
+    el.rpmVal.textContent = Math.round(S.rpm/10)*10;
+    el.rpmFill.style.width = (S.rpm/RPM_MAX*100).toFixed(1)+"%";
+    el.gear.textContent = S.gear===0 ? "N" : S.gear;
+    setGauge(S.speed);
+
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  /* ============ GPS ============ */
+  function haversine(a,b){
+    const R=6371000, toR=x=>x*Math.PI/180;
+    const dLat=toR(b.latitude-a.latitude), dLon=toR(b.longitude-a.longitude);
+    const s=Math.sin(dLat/2)**2 + Math.cos(toR(a.latitude))*Math.cos(toR(b.latitude))*Math.sin(dLon/2)**2;
+    return 2*R*Math.asin(Math.sqrt(s));
+  }
+
+  function startGps(){
+    if(!("geolocation" in navigator)){
+      setStatus("err","kein GPS verfügbar"); return;
+    }
+    setStatus("","suche GPS …");
+    S.watchId = navigator.geolocation.watchPosition(pos=>{
+      let kmh=null;
+      if(pos.coords.speed!=null && !isNaN(pos.coords.speed)){
+        kmh = pos.coords.speed*3.6;
+      }else if(S.lastPos){
+        const dtS=(pos.timestamp-S.lastPos.ts)/1000;
+        if(dtS>0.4){
+          kmh = haversine(S.lastPos.c,pos.coords)/dtS*3.6;
+        }
+      }
+      S.lastPos={c:{latitude:pos.coords.latitude,longitude:pos.coords.longitude},ts:pos.timestamp};
+      if(kmh!=null){
+        if(kmh<1.5) kmh=0;               // GPS-Rauschen im Stand
+        S.targetSpeed=Math.min(kmh, 400);
+        setStatus("live","GPS aktiv · ±"+Math.round(pos.coords.accuracy)+" m");
+      }
+    }, err=>{
+      setStatus("err", err.code===1 ? "Standort verweigert" : "GPS-Fehler");
+    }, {enableHighAccuracy:true, maximumAge:500, timeout:15000});
+  }
+
+  function stopGps(){
+    if(S.watchId!=null){ navigator.geolocation.clearWatch(S.watchId); S.watchId=null; }
+    S.lastPos=null;
+  }
+
+  async function requestWakeLock(){
+    try{ S.wakeLock = await navigator.wakeLock?.request("screen"); }catch(e){}
+  }
+  function releaseWakeLock(){ try{ S.wakeLock?.release(); }catch(e){} S.wakeLock=null; }
+
+  /* ============ UI-Events ============ */
+  function setStatus(cls,txt){
+    el.status.className="status"+(cls?" "+cls:"");
+    el.statusTxt.textContent=txt;
+  }
+
+  el.startBtn.addEventListener("click", ()=>{
+    S.running=!S.running;
+    if(S.running){
+      startAudio();
+      requestWakeLock();
+      el.startBtn.textContent="Stopp";
+      el.startBtn.classList.add("on");
+      if(S.mode==="gps") startGps();
+      else setStatus("live","Demo läuft");
+    }else{
+      stopAudio(); stopGps(); releaseWakeLock();
+      S.targetSpeed=0;
+      el.startBtn.textContent="Start";
+      el.startBtn.classList.remove("on");
+      setStatus("","bereit");
+    }
+  });
+
+  el.chips.addEventListener("click", e=>{
+    const btn=e.target.closest(".chip"); if(!btn) return;
+    document.querySelectorAll(".chip").forEach(c=>c.classList.remove("active"));
+    btn.classList.add("active");
+    S.sound=btn.dataset.sound;
+    if(S.running) swapEngine(S.sound);
+  });
+
+  function setMode(m){
+    S.mode=m;
+    el.modeDemo.classList.toggle("active",m==="demo");
+    el.modeGps.classList.toggle("active",m==="gps");
+    el.demoPanel.style.display=m==="demo"?"":"none";
+    el.gpsPanel.style.display=m==="gps"?"":"none";
+    stopGps();
+    S.targetSpeed=0;
+    if(S.running){
+      if(m==="gps") startGps(); else setStatus("live","Demo läuft");
+    }
+  }
+  el.modeDemo.addEventListener("click",()=>setMode("demo"));
+  el.modeGps.addEventListener("click",()=>setMode("gps"));
+
+  // Pedal (Pointer-Events decken Touch + Maus ab)
+  const p=el.pedal;
+  const down=e=>{e.preventDefault();S.pedalDown=true;p.classList.add("pressed")};
+  const up=()=>{S.pedalDown=false;p.classList.remove("pressed")};
+  p.addEventListener("pointerdown",down);
+  window.addEventListener("pointerup",up);
+  window.addEventListener("pointercancel",up);
+  p.addEventListener("keydown",e=>{if(e.code==="Space"||e.code==="Enter"){e.preventDefault();S.pedalDown=true;p.classList.add("pressed")}});
+  p.addEventListener("keyup",e=>{if(e.code==="Space"||e.code==="Enter")up()});
+
+  el.vol.addEventListener("input",()=>{
+    S.volume=el.vol.value/100;
+    el.volOut.textContent=el.vol.value+"%";
+    if(master&&ctx&&S.running) master.gain.setTargetAtTime(S.volume,ctx.currentTime,.05);
+  });
+  el.vmax.addEventListener("input",()=>{
+    S.vmax=+el.vmax.value;
+    el.vmaxOut.textContent=el.vmax.value;
+  });
+
+  document.addEventListener("visibilitychange",()=>{
+    if(document.visibilityState==="visible" && S.running) requestWakeLock();
+  });
+})();
+</script>
+</body>
+</html>
