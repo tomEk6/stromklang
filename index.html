@@ -3,166 +3,106 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>Stromklang — Motorsound für dein E-Auto</title>
+<title>Stromklang · Tesla UI — Motorsound für dein E-Auto</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
   :root{
-    --bg:#0B0E13;
-    --panel:#12161E;
-    --panel-2:#171C26;
-    --line:#242C38;
-    --text:#E9EDF3;
-    --dim:#8A94A3;
-    --amber:#FFB454;
-    --amber-deep:#E8842A;
-    --red:#FF4D4D;
-    --ok:#63D68A;
+    --bg:#FFFFFF; --panel:#F4F4F4; --panel-2:#FAFAFA; --line:#E2E3E5;
+    --text:#171A20; --dim:#5C5E62;
+    --amber:#E82127; --amber-deep:#B91C22; --red:#D50000; --ok:#12A150;
   }
   *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
   html,body{height:100%}
   body{
-    background:var(--bg);
-    color:var(--text);
-    font-family:"IBM Plex Sans",system-ui,sans-serif;
+    background:var(--bg); color:var(--text);
+    font-family:"Inter",system-ui,sans-serif;
     display:flex;flex-direction:column;align-items:center;
-    min-height:100dvh;
-    padding:16px 16px calc(16px + env(safe-area-inset-bottom));
+    min-height:100dvh; padding:16px 16px calc(16px + env(safe-area-inset-bottom));
     overflow-x:hidden;
   }
-  .disp{font-family:"Chakra Petch","IBM Plex Sans",sans-serif}
+  .disp{font-family:"Inter",sans-serif;letter-spacing:-.01em}
 
-  /* ---------- Header ---------- */
-  header{
-    width:100%;max-width:520px;
-    display:flex;align-items:baseline;justify-content:space-between;
-    padding:4px 2px 14px;
-  }
-  .logo{font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:20px;letter-spacing:.14em;text-transform:uppercase}
+  header{width:100%;max-width:520px;display:flex;align-items:baseline;justify-content:space-between;padding:6px 2px 16px}
+  .logo{font-weight:600;font-size:19px;letter-spacing:.32em;text-transform:uppercase}
   .logo em{font-style:normal;color:var(--amber)}
   .status{font-size:12px;color:var(--dim);display:flex;align-items:center;gap:6px}
-  .status .dot{width:8px;height:8px;border-radius:50%;background:#3a4350;transition:background .3s}
-  .status.live .dot{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+  .status .dot{width:8px;height:8px;border-radius:50%;background:#C7C8CA;transition:background .3s}
+  .status.live .dot{background:var(--ok)}
   .status.err .dot{background:var(--red)}
 
-  /* ---------- Gauge ---------- */
   .gauge-wrap{
-    width:100%;max-width:520px;
-    background:linear-gradient(180deg,var(--panel-2),var(--panel));
-    border:1px solid var(--line);
-    border-radius:20px;
-    padding:22px 18px 16px;
-    position:relative;
+    width:100%;max-width:520px;background:#FFFFFF;
+    border:1px solid var(--line);border-radius:12px;
+    padding:22px 18px 16px;position:relative;
+    box-shadow:0 2px 14px rgba(23,26,32,.05);
   }
   .gauge{width:min(78vw,340px);margin:0 auto;display:block}
-  .speed-num{
-    position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);
-    text-align:center;pointer-events:none;
-  }
-  .speed-num .val{font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:clamp(52px,15vw,72px);line-height:1;font-variant-numeric:tabular-nums}
-  .speed-num .unit{font-size:13px;color:var(--dim);letter-spacing:.25em;text-transform:uppercase;margin-top:2px}
+  .speed-num{position:absolute;left:50%;top:44%;transform:translate(-50%,-50%);text-align:center;pointer-events:none}
+  .speed-num .val{font-weight:600;font-size:clamp(52px,15vw,74px);line-height:1;font-variant-numeric:tabular-nums;letter-spacing:-.03em}
+  .speed-num .unit{font-size:12px;color:var(--dim);letter-spacing:.3em;text-transform:uppercase;margin-top:4px}
 
-  .subrow{
-    display:flex;justify-content:space-between;align-items:flex-end;
-    margin-top:6px;padding:0 6px;
-  }
-  .gearbox{font-family:"Chakra Petch",sans-serif}
-  .gearbox .g{font-size:34px;font-weight:700;color:var(--amber)}
-  .gearbox .lbl{font-size:11px;color:var(--dim);letter-spacing:.2em;text-transform:uppercase;display:block}
+  .subrow{display:flex;justify-content:space-between;align-items:flex-end;margin-top:6px;padding:0 6px}
+  .gearbox .g{font-size:32px;font-weight:600;color:var(--amber)}
+  .gearbox .lbl{font-size:10.5px;color:var(--dim);letter-spacing:.24em;text-transform:uppercase;display:block}
   .rpmbox{text-align:right}
-  .rpmbox .v{font-family:"Chakra Petch",sans-serif;font-size:22px;font-weight:600;font-variant-numeric:tabular-nums}
-  .rpmbox .lbl{font-size:11px;color:var(--dim);letter-spacing:.2em;text-transform:uppercase}
+  .rpmbox .v{font-size:21px;font-weight:600;font-variant-numeric:tabular-nums}
+  .rpmbox .lbl{font-size:10.5px;color:var(--dim);letter-spacing:.24em;text-transform:uppercase}
 
-  .rpm-ribbon{
-    margin-top:10px;height:10px;border-radius:5px;background:#1B212C;overflow:hidden;position:relative;
-  }
-  .rpm-ribbon .fill{
-    height:100%;width:0%;
-    background:linear-gradient(90deg,var(--amber-deep),var(--amber) 70%,var(--red));
-    border-radius:5px;
-    transition:width .08s linear;
-  }
+  .rpm-ribbon{margin-top:10px;height:8px;border-radius:4px;background:#ECEDEE;overflow:hidden;position:relative}
+  .rpm-ribbon .fill{height:100%;width:0%;background:linear-gradient(90deg,#B91C22,#E82127 70%,#FF5C57);border-radius:4px;transition:width .08s linear}
 
-  /* ---------- Sections ---------- */
   section{width:100%;max-width:520px;margin-top:14px}
-  .card{
-    background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px;
-  }
-  .card h2{
-    font-size:11px;font-weight:600;color:var(--dim);
-    letter-spacing:.22em;text-transform:uppercase;margin-bottom:10px;
-    font-family:"Chakra Petch",sans-serif;
-  }
+  .card{background:var(--panel);border:1px solid transparent;border-radius:12px;padding:14px}
+  .card h2{font-size:10.5px;font-weight:600;color:var(--dim);letter-spacing:.26em;text-transform:uppercase;margin-bottom:10px}
 
-  /* sound chips */
   .chips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
   .chip{
-    border:1px solid var(--line);background:var(--panel-2);color:var(--text);
-    border-radius:12px;padding:12px 6px;cursor:pointer;text-align:center;
-    font-family:"Chakra Petch",sans-serif;font-weight:600;font-size:14px;letter-spacing:.04em;
-    transition:border-color .2s,background .2s,color .2s;
+    border:1px solid transparent;background:#FFFFFF;color:var(--text);
+    border-radius:8px;padding:12px 6px;cursor:pointer;text-align:center;
+    font-family:"Inter",sans-serif;font-weight:600;font-size:13.5px;
+    transition:background .15s,color .15s;
   }
-  .chip small{display:block;font-family:"IBM Plex Sans",sans-serif;font-weight:400;font-size:11px;color:var(--dim);margin-top:3px;letter-spacing:0}
-  .chip.active{border-color:var(--amber);background:rgba(255,180,84,.08);color:var(--amber)}
-  .chip.active small{color:var(--amber-deep)}
+  .chip small{display:block;font-weight:400;font-size:11px;color:var(--dim);margin-top:3px}
+  .chip.active{background:#171A20;color:#FFFFFF}
+  .chip.active small{color:#9B9DA1}
 
-  /* mode toggle */
   .modes{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
   .mode-btn{
-    border:1px solid var(--line);background:var(--panel-2);color:var(--dim);
-    border-radius:12px;padding:10px;cursor:pointer;font-size:13px;font-weight:500;
-    transition:all .2s;font-family:"IBM Plex Sans",sans-serif;
+    border:1px solid transparent;background:#FFFFFF;color:var(--dim);
+    border-radius:8px;padding:10px;cursor:pointer;font-size:13px;font-weight:500;
+    transition:all .15s;font-family:"Inter",sans-serif;
   }
-  .mode-btn.active{border-color:var(--amber);color:var(--text);background:rgba(255,180,84,.07)}
+  .mode-btn.active{background:#171A20;color:#FFFFFF}
 
-  /* pedal */
   .pedal{
-    width:100%;height:88px;border-radius:14px;border:1px solid var(--line);
-    background:linear-gradient(180deg,#1A202B,#12161E);
-    color:var(--dim);font-family:"Chakra Petch",sans-serif;font-weight:700;
-    font-size:15px;letter-spacing:.2em;text-transform:uppercase;cursor:pointer;
-    user-select:none;-webkit-user-select:none;touch-action:none;
-    transition:transform .05s;
+    width:100%;height:88px;border-radius:10px;border:1px solid var(--line);
+    background:#FFFFFF;color:var(--dim);
+    font-family:"Inter",sans-serif;font-weight:600;font-size:13.5px;
+    letter-spacing:.24em;text-transform:uppercase;cursor:pointer;
+    user-select:none;-webkit-user-select:none;touch-action:none;transition:transform .05s;
   }
   .pedal:active,.pedal.pressed{transform:scale(.985);border-color:var(--amber);color:var(--amber)}
   .gps-hint{font-size:13px;color:var(--dim);line-height:1.55}
   .gps-hint b{color:var(--text);font-weight:500}
 
-  /* sliders */
   .slider-row{display:flex;align-items:center;gap:12px;margin-top:4px}
   .slider-row label{font-size:12px;color:var(--dim);width:86px;flex:none}
   .slider-row output{font-size:12px;color:var(--text);width:44px;text-align:right;font-variant-numeric:tabular-nums}
-  input[type=range]{
-    flex:1;appearance:none;-webkit-appearance:none;height:6px;border-radius:3px;
-    background:#1B212C;outline:none;
-  }
-  input[type=range]::-webkit-slider-thumb{
-    -webkit-appearance:none;appearance:none;width:22px;height:22px;border-radius:50%;
-    background:var(--amber);border:3px solid var(--bg);cursor:pointer;
-  }
-  input[type=range]::-moz-range-thumb{
-    width:18px;height:18px;border-radius:50%;background:var(--amber);border:3px solid var(--bg);cursor:pointer;
-  }
+  input[type=range]{flex:1;appearance:none;-webkit-appearance:none;height:5px;border-radius:3px;background:#E2E3E5;outline:none}
+  input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;appearance:none;width:22px;height:22px;border-radius:50%;background:#171A20;border:3px solid #FFFFFF;box-shadow:0 1px 4px rgba(0,0,0,.2);cursor:pointer}
+  input[type=range]::-moz-range-thumb{width:18px;height:18px;border-radius:50%;background:#171A20;border:3px solid #FFFFFF;cursor:pointer}
 
-  /* start button */
   .start{
-    width:100%;max-width:520px;margin-top:14px;
-    padding:18px;border-radius:16px;border:none;cursor:pointer;
-    font-family:"Chakra Petch",sans-serif;font-weight:700;font-size:17px;
-    letter-spacing:.24em;text-transform:uppercase;
-    background:var(--amber);color:#141005;
-    transition:filter .2s;
+    width:100%;max-width:520px;margin-top:14px;padding:17px;border-radius:8px;border:none;cursor:pointer;
+    font-family:"Inter",sans-serif;font-weight:600;font-size:15px;letter-spacing:.3em;text-transform:uppercase;
+    background:var(--amber);color:#FFFFFF;transition:filter .2s;
   }
-  .start:hover{filter:brightness(1.06)}
-  .start.on{background:transparent;color:var(--red);border:1px solid var(--red)}
+  .start:hover{filter:brightness(1.05)}
+  .start.on{background:#FFFFFF;color:var(--amber);border:1px solid var(--amber)}
 
-  footer{
-    max-width:520px;margin-top:16px;font-size:11.5px;color:#5C6675;
-    text-align:center;line-height:1.6;padding:0 8px;
-  }
-  @media (prefers-reduced-motion:reduce){
-    .rpm-ribbon .fill{transition:none}
-  }
+  footer{max-width:520px;margin-top:16px;font-size:11.5px;color:#9B9DA1;text-align:center;line-height:1.6;padding:0 8px}
+  @media (prefers-reduced-motion:reduce){.rpm-ribbon .fill{transition:none}}
 </style>
 </head>
 <body>
@@ -175,16 +115,16 @@
 <div class="gauge-wrap">
   <svg class="gauge" viewBox="0 0 200 130" aria-hidden="true">
     <!-- ticks -->
-    <g id="ticks" stroke="#39424F" stroke-width="2"></g>
+    <g id="ticks" stroke="#D0D1D2" stroke-width="2"></g>
     <!-- track -->
-    <path d="M 20 115 A 80 80 0 1 1 180 115" fill="none" stroke="#1B212C" stroke-width="10" stroke-linecap="round"/>
+    <path d="M 20 115 A 80 80 0 1 1 180 115" fill="none" stroke="#ECEDEE" stroke-width="10" stroke-linecap="round"/>
     <!-- progress -->
     <path id="arc" d="M 20 115 A 80 80 0 1 1 180 115" fill="none" stroke="url(#grad)" stroke-width="10" stroke-linecap="round"/>
     <defs>
       <linearGradient id="grad" x1="0" y1="1" x2="1" y2="0">
-        <stop offset="0%" stop-color="#E8842A"/>
-        <stop offset="70%" stop-color="#FFB454"/>
-        <stop offset="100%" stop-color="#FFD9A0"/>
+        <stop offset="0%" stop-color="#B91C22"/>
+        <stop offset="70%" stop-color="#E82127"/>
+        <stop offset="100%" stop-color="#FF6F6A"/>
       </linearGradient>
     </defs>
   </svg>
@@ -204,8 +144,12 @@
     <h2>Sound</h2>
     <div class="chips" id="chips">
       <button class="chip active" data-sound="v8">V8<small>Muscle-Car</small></button>
+      <button class="chip" data-sound="boxer">Boxer<small>Sportwagen</small></button>
+      <button class="chip" data-sound="v10">V10<small>Formel-Kreischen</small></button>
+      <button class="chip" data-sound="turbo">Turbo<small>Rallye + Pssh</small></button>
       <button class="chip" data-sound="jet">Turbine<small>Jet-Triebwerk</small></button>
       <button class="chip" data-sound="warp">Warp<small>Sci-Fi-Antrieb</small></button>
+      <button class="chip" data-sound="ion">Ion<small>Puls-Antrieb</small></button>
     </div>
   </div>
 </section>
@@ -325,6 +269,18 @@
     return buf;
   }
 
+  /* Weiche Übersteuerung — macht aus sterilen Oszillatoren ein Knurren */
+  function makeDrive(c, k){
+    const ws=c.createWaveShaper();
+    const n=1024, curve=new Float32Array(n);
+    for(let i=0;i<n;i++){
+      const x=i/(n-1)*2-1;
+      curve[i]=Math.tanh(k*x)/Math.tanh(k);
+    }
+    ws.curve=curve; ws.oversample="2x";
+    return ws;
+  }
+
   /* Jeder Sound liefert: {update(rpm,speed,throttle,t), stop()} */
 
   function buildV8(c, out){
@@ -347,13 +303,14 @@
 
     const body = c.createBiquadFilter(); body.type="lowpass"; body.frequency.value=500; body.Q.value=1.2;
     const growl= c.createBiquadFilter(); growl.type="peaking"; growl.frequency.value=140; growl.gain.value=7; growl.Q.value=1;
+    const drv = makeDrive(c, 2.2);
 
     const mix=c.createGain(); mix.gain.value=0;
 
     fire.connect(gFire); sub.connect(gSub); harm.connect(gHarm);
     noise.connect(nFilt); nFilt.connect(nGain);
     [gFire,gSub,gHarm,nGain].forEach(n=>n.connect(growl));
-    growl.connect(body); body.connect(mix); mix.connect(out);
+    growl.connect(drv); drv.connect(body); body.connect(mix); mix.connect(out);
 
     [fire,sub,harm,lopeLfo,noise].forEach(n=>n.start());
 
@@ -445,19 +402,251 @@
     };
   }
 
-  const BUILDERS = { v8:buildV8, jet:buildJet, warp:buildWarp };
+  /* ---- Boxer / Flat-6: heiser-rotziger Sportwagen, dreht gierig hoch ---- */
+  function buildBoxer(c, out){
+    const fire=c.createOscillator(); fire.type="sawtooth";
+    const fire2=c.createOscillator(); fire2.type="sawtooth"; fire2.detune.value=14;
+    const sub=c.createOscillator(); sub.type="square";
+    const gF=c.createGain(); gF.gain.value=.28;
+    const gF2=c.createGain(); gF2.gain.value=.24;
+    const gS=c.createGain(); gS.gain.value=.2;
 
-  function startAudio(){
+    // "Rotz" im Auspuff: gefiltertes Rauschen im Mittenbereich
+    const rasp=c.createBufferSource(); rasp.buffer=makeNoiseBuffer(c); rasp.loop=true;
+    const rFilt=c.createBiquadFilter(); rFilt.type="bandpass"; rFilt.frequency.value=1100; rFilt.Q.value=1.6;
+    const gR=c.createGain(); gR.gain.value=0;
+
+    const drv=makeDrive(c,2.8);
+    const pres=c.createBiquadFilter(); pres.type="peaking"; pres.frequency.value=1500; pres.gain.value=5; pres.Q.value=1.2;
+    const body=c.createBiquadFilter(); body.type="lowpass"; body.frequency.value=900; body.Q.value=1;
+    const mix=c.createGain(); mix.gain.value=0;
+
+    fire.connect(gF); fire2.connect(gF2); sub.connect(gS);
+    rasp.connect(rFilt); rFilt.connect(gR);
+    [gF,gF2,gS,gR].forEach(n=>n.connect(drv));
+    drv.connect(pres); pres.connect(body); body.connect(mix); mix.connect(out);
+    [fire,fire2,sub,rasp].forEach(n=>n.start());
+
+    return {
+      update(rpm, speed, thr, t){
+        const f=rpm/60*3;                     // 6 Zylinder, 4-Takt
+        fire.frequency.setTargetAtTime(f,t,.04);
+        fire2.frequency.setTargetAtTime(f,t,.04);
+        sub.frequency.setTargetAtTime(f/2,t,.04);
+        rFilt.frequency.setTargetAtTime(700+rpm*.28,t,.08);
+        gR.gain.setTargetAtTime(.05+.25*thr+.1*(rpm/RPM_MAX),t,.08);
+        body.frequency.setTargetAtTime(500+rpm*.9+thr*1200,t,.06);
+        mix.gain.setTargetAtTime(.45+.55*Math.min(1,(rpm/RPM_MAX)*.7+thr*.5),t,.06);
+      },
+      stop(){ [fire,fire2,sub,rasp].forEach(n=>{try{n.stop()}catch(e){}}); }
+    };
+  }
+
+  /* ---- Turbo-Vierzylinder: Rallye-Charakter, Turbopfeifen,
+          Blow-off-"Pssh" beim Gaswegnehmen ---- */
+  function buildTurbo(c, out){
+    const fire=c.createOscillator(); fire.type="sawtooth";
+    const sq=c.createOscillator(); sq.type="square"; sq.detune.value=-8;
+    const sub=c.createOscillator(); sub.type="sawtooth";
+    const gF=c.createGain(); gF.gain.value=.32;
+    const gQ=c.createGain(); gQ.gain.value=.18;
+    const gS=c.createGain(); gS.gain.value=.32;
+
+    const whis=c.createOscillator(); whis.type="sine";   // Turbo-Pfeifen
+    const gW=c.createGain(); gW.gain.value=0;
+
+    const drv=makeDrive(c,3.4);
+    const body=c.createBiquadFilter(); body.type="lowpass"; body.frequency.value=650;
+    const mix=c.createGain(); mix.gain.value=0;
+
+    fire.connect(gF); sq.connect(gQ); sub.connect(gS);
+    [gF,gQ,gS].forEach(n=>n.connect(drv));
+    drv.connect(body); body.connect(mix);
+    whis.connect(gW); gW.connect(mix);
+    mix.connect(out);
+    [fire,sq,sub,whis].forEach(n=>n.start());
+
+    let lastThr=0, lastBov=-9;
+    function bov(t){                                     // Blow-off-Ventil
+      const n=c.createBufferSource(); n.buffer=makeNoiseBuffer(c);
+      const f=c.createBiquadFilter(); f.type="bandpass"; f.Q.value=2;
+      f.frequency.setValueAtTime(2600,t);
+      f.frequency.exponentialRampToValueAtTime(700,t+.45);
+      const g=c.createGain();
+      g.gain.setValueAtTime(.38,t);
+      g.gain.exponentialRampToValueAtTime(.001,t+.5);
+      n.connect(f); f.connect(g); g.connect(out);
+      n.start(t); n.stop(t+.55);
+    }
+
+    return {
+      update(rpm, speed, thr, t){
+        const f=rpm/60*2;                     // 4 Zylinder, 4-Takt
+        fire.frequency.setTargetAtTime(f,t,.05);
+        sq.frequency.setTargetAtTime(f*2,t,.05);
+        sub.frequency.setTargetAtTime(f/2,t,.05);
+        whis.frequency.setTargetAtTime(900+rpm*1.15+thr*800,t,.1);
+        gW.gain.setTargetAtTime(.02+.09*thr*(rpm/RPM_MAX),t,.1);
+        body.frequency.setTargetAtTime(380+rpm*.6+thr*1000,t,.07);
+        mix.gain.setTargetAtTime(.5+.5*Math.min(1,rpm/RPM_MAX+thr*.4),t,.07);
+        if(lastThr-thr>.22 && speed>15 && t-lastBov>1.2){ bov(t); lastBov=t; }
+        lastThr+=(thr-lastThr)*.5;
+      },
+      stop(){ [fire,sq,sub,whis].forEach(n=>{try{n.stop()}catch(e){}}); }
+    };
+  }
+
+  /* ---- V10-Formelwagen: dreht virtuell fast doppelt so hoch,
+          metallisches Kreischen per Ringmodulation ---- */
+  function buildV10(c, out){
+    const o1=c.createOscillator(); o1.type="sawtooth";
+    const o2=c.createOscillator(); o2.type="sawtooth"; o2.detune.value=9;
+    const o3=c.createOscillator(); o3.type="square";
+    const g1=c.createGain(); g1.gain.value=.28;
+    const g2=c.createGain(); g2.gain.value=.28;
+    const g3=c.createGain(); g3.gain.value=.1;
+
+    const ring=c.createGain(); ring.gain.value=1;        // Metall-Schimmer
+    const ringOsc=c.createOscillator(); ringOsc.type="sine";
+    const ringDepth=c.createGain(); ringDepth.gain.value=.22;
+    ringOsc.connect(ringDepth); ringDepth.connect(ring.gain);
+
+    const drv=makeDrive(c,4);
+    const hp=c.createBiquadFilter(); hp.type="highpass"; hp.frequency.value=120;
+    const scream=c.createBiquadFilter(); scream.type="peaking"; scream.frequency.value=2400; scream.gain.value=6; scream.Q.value=1.4;
+    const body=c.createBiquadFilter(); body.type="lowpass"; body.frequency.value=2000;
+    const mix=c.createGain(); mix.gain.value=0;
+
+    o1.connect(g1); o2.connect(g2); o3.connect(g3);
+    [g1,g2,g3].forEach(g=>g.connect(ring));
+    ring.connect(drv); drv.connect(hp); hp.connect(scream);
+    scream.connect(body); body.connect(mix); mix.connect(out);
+    [o1,o2,o3,ringOsc].forEach(n=>n.start());
+
+    return {
+      update(rpm, speed, thr, t){
+        const r=rpm*1.9;                      // Formel-Drehzahlen
+        const f=r/60*5;                       // 10 Zylinder, 4-Takt
+        o1.frequency.setTargetAtTime(f,t,.035);
+        o2.frequency.setTargetAtTime(f,t,.035);
+        o3.frequency.setTargetAtTime(f*.5,t,.035);
+        ringOsc.frequency.setTargetAtTime(f*1.98,t,.05);
+        scream.frequency.setTargetAtTime(1500+r*.35,t,.08);
+        body.frequency.setTargetAtTime(1200+r*.5+thr*1500,t,.06);
+        mix.gain.setTargetAtTime(.4+.6*Math.min(1,r/(RPM_MAX*1.9)+thr*.3),t,.06);
+      },
+      stop(){ [o1,o2,o3,ringOsc].forEach(n=>{try{n.stop()}catch(e){}}); }
+    };
+  }
+
+  /* ---- Ionen-Antrieb: pulsierendes Sci-Fi-Wummern; der Puls wird mit
+          dem Tempo schneller, bis er fast zu einem Ton verschmilzt ---- */
+  function buildIon(c, out){
+    const car=c.createOscillator(); car.type="sawtooth";
+    const sub=c.createOscillator(); sub.type="sine";
+
+    // FM-Synthese: metallisch-außerirdische Textur
+    const fm=c.createOscillator(); fm.type="sine";
+    const fmAmt=c.createGain(); fmAmt.gain.value=30;
+    fm.connect(fmAmt); fmAmt.connect(car.frequency);
+
+    const gCar=c.createGain(); gCar.gain.value=.3;
+    const gSub=c.createGain(); gSub.gain.value=.25;
+
+    // Puls: Tremolo-LFO, dessen Tempo mit der Geschwindigkeit steigt
+    const trem=c.createGain(); trem.gain.value=.6;
+    const lfo=c.createOscillator(); lfo.type="sine"; lfo.frequency.value=1.6;
+    const lfoAmt=c.createGain(); lfoAmt.gain.value=.4;
+    lfo.connect(lfoAmt); lfoAmt.connect(trem.gain);
+
+    // Glitzern in den Höhen mit langsamem Vibrato
+    const shim=c.createOscillator(); shim.type="sine";
+    const shimVib=c.createOscillator(); shimVib.type="sine"; shimVib.frequency.value=.4;
+    const shimVibAmt=c.createGain(); shimVibAmt.gain.value=120;
+    shimVib.connect(shimVibAmt); shimVibAmt.connect(shim.frequency);
+    const gShim=c.createGain(); gShim.gain.value=.015;
+
+    const filt=c.createBiquadFilter(); filt.type="lowpass"; filt.frequency.value=500; filt.Q.value=6;
+    const mix=c.createGain(); mix.gain.value=0;
+
+    car.connect(gCar); sub.connect(gSub);
+    gCar.connect(filt); filt.connect(trem);
+    gSub.connect(trem);
+    shim.connect(gShim); gShim.connect(mix);
+    trem.connect(mix); mix.connect(out);
+    [car,sub,fm,lfo,shim,shimVib].forEach(n=>n.start());
+
+    return {
+      update(rpm, speed, thr, t){
+        const p=Math.min(1, speed/S.vmax);
+        const base=45+180*p;
+        car.frequency.setTargetAtTime(base,t,.15);
+        sub.frequency.setTargetAtTime(base/2,t,.15);
+        fm.frequency.setTargetAtTime(base*2.01,t,.15);
+        fmAmt.gain.setTargetAtTime(20+120*p+80*thr,t,.15);
+        lfo.frequency.setTargetAtTime(1.4+14*p+3*thr,t,.2);      // Puls-Tempo
+        lfoAmt.gain.setTargetAtTime(.42-.22*p,t,.3);             // Puls glättet sich
+        filt.frequency.setTargetAtTime(320+2600*p+1200*thr,t,.12);
+        shim.frequency.setTargetAtTime(2800+2600*p,t,.2);
+        gShim.gain.setTargetAtTime(.008+.03*p,t,.2);
+        mix.gain.setTargetAtTime(.35+.65*Math.max(p*.9,thr*.4),t,.12);
+      },
+      stop(){ [car,sub,fm,lfo,shim,shimVib].forEach(n=>{try{n.stop()}catch(e){}}); }
+    };
+  }
+
+  const BUILDERS = { v8:buildV8, boxer:buildBoxer, turbo:buildTurbo, v10:buildV10, jet:buildJet, warp:buildWarp, ion:buildIon };
+
+  /* iOS-Trick: ein loopendes, stummes <audio>-Element schaltet die
+     Audio-Session auf "Wiedergabe" um — dann ignoriert das iPhone den
+     Stummschalter für Web-Audio (wie bei Musik-Apps üblich). */
+  let unlockEl=null;
+  function unlockIosAudio(){
+    if(unlockEl) { unlockEl.play().catch(()=>{}); return; }
+    unlockEl=document.createElement("audio");
+    unlockEl.setAttribute("playsinline","");
+    unlockEl.loop=true;
+    unlockEl.volume=0.01;
+    // 0,1 s Stille als WAV (Base64, ~1 kB)
+    const rate=8000, n=800;
+    const buf=new ArrayBuffer(44+n*2), v=new DataView(buf);
+    const w=(o,s)=>{for(let i=0;i<s.length;i++)v.setUint8(o+i,s.charCodeAt(i))};
+    w(0,"RIFF"); v.setUint32(4,36+n*2,true); w(8,"WAVEfmt ");
+    v.setUint32(16,16,true); v.setUint16(20,1,true); v.setUint16(22,1,true);
+    v.setUint32(24,rate,true); v.setUint32(28,rate*2,true);
+    v.setUint16(32,2,true); v.setUint16(34,16,true);
+    w(36,"data"); v.setUint32(40,n*2,true);
+    unlockEl.src=URL.createObjectURL(new Blob([buf],{type:"audio/wav"}));
+    document.body.appendChild(unlockEl);
+    unlockEl.play().catch(()=>{});
+  }
+
+  async function startAudio(){
+    unlockIosAudio();
     if(!ctx){
       ctx = new (window.AudioContext||window.webkitAudioContext)();
       master = ctx.createGain();
       const comp = ctx.createDynamicsCompressor();
       master.connect(comp); comp.connect(ctx.destination);
     }
-    ctx.resume();
+    try{ await ctx.resume(); }catch(e){}
+    // Safari-Unlock: kurzen stummen Ton innerhalb der Nutzer-Geste abspielen
+    const kick=ctx.createBufferSource();
+    kick.buffer=ctx.createBuffer(1,1,ctx.sampleRate);
+    kick.connect(ctx.destination); kick.start(0);
     master.gain.setTargetAtTime(S.volume, ctx.currentTime, .1);
     swapEngine(S.sound);
+    if(ctx.state!=="running") setStatus("err","Audio blockiert — nochmal tippen");
   }
+
+  // Falls der Browser das Audio pausiert (Tab-Wechsel etc.): bei jeder
+  // Berührung wieder aufwecken.
+  ["pointerdown","touchend","click"].forEach(ev=>{
+    window.addEventListener(ev,()=>{
+      if(S.running && ctx && ctx.state!=="running") ctx.resume();
+      if(S.running && unlockEl && unlockEl.paused) unlockEl.play().catch(()=>{});
+    },{passive:true});
+  });
 
   function swapEngine(name){
     if(!ctx) return;
@@ -468,6 +657,7 @@
   function stopAudio(){
     if(engine){ engine.stop(); engine=null; }
     if(master && ctx) master.gain.setTargetAtTime(0, ctx.currentTime, .1);
+    if(unlockEl) unlockEl.pause();
   }
 
   /* ============ Fahrphysik / Loop ============ */
