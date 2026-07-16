@@ -150,6 +150,7 @@
       <button class="chip" data-sound="jet">Turbine<small>Jet-Triebwerk</small></button>
       <button class="chip" data-sound="warp">Warp<small>Sci-Fi-Antrieb</small></button>
       <button class="chip" data-sound="ion">Ion<small>Puls-Antrieb</small></button>
+      <button class="chip" data-sound="calm">Calm<small>Entspanntes Gleiten</small></button>
     </div>
   </div>
 </section>
@@ -595,7 +596,54 @@
     };
   }
 
-  const BUILDERS = { v8:buildV8, boxer:buildBoxer, turbo:buildTurbo, v10:buildV10, jet:buildJet, warp:buildWarp, ion:buildIon };
+  /* ---- Calm: warmer Ambient-Teppich fürs entspannte Cruisen.
+          Ein leiser Akkord (Grundton + Quinte + Oktave), der mit dem
+          Tempo sanft heller wird, plus weiches "Fahrtwind"-Rauschen ---- */
+  function buildCalm(c, out){
+    const o1=c.createOscillator(); o1.type="sine";       // Grundton
+    const o2=c.createOscillator(); o2.type="sine";       // Quinte
+    const o3=c.createOscillator(); o3.type="triangle";   // Oktave
+    o2.detune.value=4; o3.detune.value=-3;               // leichtes Schweben
+    const g1=c.createGain(); g1.gain.value=.3;
+    const g2=c.createGain(); g2.gain.value=.16;
+    const g3=c.createGain(); g3.gain.value=.08;
+
+    // langsames "Atmen" auf dem Filter
+    const breath=c.createOscillator(); breath.type="sine"; breath.frequency.value=.09;
+    const breathAmt=c.createGain(); breathAmt.gain.value=140;
+    const filt=c.createBiquadFilter(); filt.type="lowpass"; filt.frequency.value=700; filt.Q.value=.4;
+    breath.connect(breathAmt); breathAmt.connect(filt.frequency);
+
+    // weicher Fahrtwind
+    const wind=c.createBufferSource(); wind.buffer=makeNoiseBuffer(c); wind.loop=true;
+    const wFilt=c.createBiquadFilter(); wFilt.type="lowpass"; wFilt.frequency.value=500; wFilt.Q.value=.3;
+    const gW=c.createGain(); gW.gain.value=.03;
+
+    const mix=c.createGain(); mix.gain.value=0;
+
+    o1.connect(g1); o2.connect(g2); o3.connect(g3);
+    [g1,g2,g3].forEach(g=>g.connect(filt));
+    wind.connect(wFilt); wFilt.connect(gW); gW.connect(mix);
+    filt.connect(mix); mix.connect(out);
+    [o1,o2,o3,breath,wind].forEach(n=>n.start());
+
+    return {
+      update(rpm, speed, thr, t){
+        const p=Math.min(1, speed/S.vmax);
+        const base=60+70*p;                            // bleibt tief & ruhig
+        o1.frequency.setTargetAtTime(base,t,.4);
+        o2.frequency.setTargetAtTime(base*1.5,t,.4);
+        o3.frequency.setTargetAtTime(base*2,t,.4);
+        filt.frequency.setTargetAtTime(550+900*p+300*thr,t,.5);
+        wFilt.frequency.setTargetAtTime(400+900*p,t,.5);
+        gW.gain.setTargetAtTime(.02+.06*p,t,.5);
+        mix.gain.setTargetAtTime(.3+.4*p,t,.4);        // träge, nie aufdringlich
+      },
+      stop(){ [o1,o2,o3,breath,wind].forEach(n=>{try{n.stop()}catch(e){}}); }
+    };
+  }
+
+  const BUILDERS = { v8:buildV8, boxer:buildBoxer, turbo:buildTurbo, v10:buildV10, jet:buildJet, warp:buildWarp, ion:buildIon, calm:buildCalm };
 
   /* iOS-Trick: ein loopendes, stummes <audio>-Element schaltet die
      Audio-Session auf "Wiedergabe" um — dann ignoriert das iPhone den
