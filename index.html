@@ -50,7 +50,7 @@
   .rpmbox .lbl{font-size:10.5px;color:var(--dim);letter-spacing:.24em;text-transform:uppercase}
 
   .rpm-ribbon{margin-top:10px;height:8px;border-radius:4px;background:#ECEDEE;overflow:hidden;position:relative}
-  .rpm-ribbon .fill{height:100%;width:0%;background:linear-gradient(90deg,#B91C22,#E82127 70%,#FF5C57);border-radius:4px;transition:width .08s linear}
+  .rpm-ribbon .fill{height:100%;width:0%;background:linear-gradient(90deg,#B91C22,#E82127 70%,#FF5C57);border-radius:4px;transition:width .05s linear}
 
   section{width:100%;max-width:520px;margin-top:14px}
   .card{background:var(--panel);border:1px solid transparent;border-radius:12px;padding:14px}
@@ -98,6 +98,14 @@
   .pedal:active,.pedal.pressed{transform:scale(.985);border-color:var(--amber);color:var(--amber)}
   .gps-hint{font-size:13px;color:var(--dim);line-height:1.55}
   .gps-hint b{color:var(--text);font-weight:500}
+  .sensor-line{
+    display:flex;align-items:center;gap:7px;margin-top:10px;
+    font-size:12px;color:var(--dim);
+  }
+  .sensor-line .dot{width:7px;height:7px;border-radius:50%;background:#C7C8CA;flex:none}
+  .sensor-line.on .dot{background:var(--ok)}
+  .g-meter{flex:1;height:5px;border-radius:3px;background:#E2E3E5;overflow:hidden}
+  .g-meter i{display:block;height:100%;width:0%;background:var(--amber);border-radius:3px;transition:width .06s linear}
 
   .slider-row{display:flex;align-items:center;gap:12px;margin-top:4px}
   .slider-row label{font-size:12px;color:var(--dim);width:86px;flex:none}
@@ -115,7 +123,7 @@
   .start.on{background:#FFFFFF;color:var(--amber);border:1px solid var(--amber)}
 
   footer{max-width:520px;margin-top:16px;font-size:11.5px;color:#9B9DA1;text-align:center;line-height:1.6;padding:0 8px}
-  @media (prefers-reduced-motion:reduce){.rpm-ribbon .fill{transition:none}}
+  @media (prefers-reduced-motion:reduce){.rpm-ribbon .fill,.g-meter i{transition:none}}
 </style>
 </head>
 <body>
@@ -191,10 +199,16 @@
     </div>
     <div id="gpsPanel" style="display:none">
       <p class="gps-hint">
-        Nutzt die <b>echte Geschwindigkeit</b> deines Handys über GPS.
-        Erlaube den Standortzugriff und lass den Bildschirm an —
-        manche Browser pausieren Audio &amp; Sensoren im Hintergrund.
+        Nutzt die <b>echte Geschwindigkeit</b> deines Handys über GPS —
+        zwischen den Fixes wird die Bewegung hochgerechnet, damit der Sound
+        nicht hinterherhinkt. Der <b>Beschleunigungssensor</b> (~60 Hz) liefert
+        zusätzlich den Lastwechsel in Echtzeit.
       </p>
+      <div class="sensor-line" id="sensorLine">
+        <span class="dot"></span>
+        <span id="sensorTxt">Bewegungssensor: aus</span>
+        <span class="g-meter"><i id="gBar"></i></span>
+      </div>
     </div>
   </div>
 </section>
@@ -211,6 +225,11 @@
       <label for="vmax">V-max Skala</label>
       <input type="range" id="vmax" min="60" max="260" step="10" value="160">
       <output id="vmaxOut">160</output>
+    </div>
+    <div class="slider-row">
+      <label for="resp">Ansprechen</label>
+      <input type="range" id="resp" min="50" max="200" step="5" value="100">
+      <output id="respOut">100%</output>
     </div>
   </div>
 </section>
@@ -239,15 +258,28 @@
     gear:0,                 // 0 = N, -1 = D (Direktantrieb)
     vmax:160,
     volume:0.7,
+    resp:1,                 // Ansprech-Faktor für alle Glättungen
     pedalDown:false,
     lastPos:null,
     watchId:null,
     wakeLock:null,
+
+    // --- GPS-Extrapolation ---
+    gpsSpeed:0,             // letzter gemessener Wert (km/h)
+    gpsAccel:0,             // km/h pro s, aus zwei Fixes abgeleitet
+    gpsTs:0,                // performance.now() des letzten Fixes
+
+    // --- Bewegungssensor ---
+    motionOn:false,
+    motionMag:0,            // geglättete Längs-/Querbeschleunigung in m/s²
+    motionBias:{x:0,y:0,z:0},
+    motionSeen:0,
   };
 
   // virtuelle Gänge: [von km/h, bis km/h]
   const GEARS = [[0,22],[22,42],[42,68],[68,98],[98,132],[132,400]];
   const RPM_IDLE = 900, RPM_MAX = 6800, RPM_SHIFT_LOW = 1400;
+  const EXTRAP_MAX = 1.5;   // max. Sekunden, die wir vorausrechnen
 
   /* ============ DOM ============ */
   const $ = id => document.getElementById(id);
@@ -260,6 +292,8 @@
     demoPanel:$("demoPanel"), gpsPanel:$("gpsPanel"),
     gearToggle:$("gearToggle"), gearState:$("gearState"), gearHint:$("gearHint"),
     vol:$("vol"), volOut:$("volOut"), vmax:$("vmax"), vmaxOut:$("vmaxOut"),
+    resp:$("resp"), respOut:$("respOut"),
+    sensorLine:$("sensorLine"), sensorTxt:$("sensorTxt"), gBar:$("gBar"),
   };
 
   /* ============ Gauge ============ */
@@ -287,6 +321,11 @@
 
   /* ============ Audio-Engine ============ */
   let ctx=null, master=null, engineBus=null, engine=null;
+
+  // Zentrale Stellschraube: alle Audio-Glättungen skalieren mit "Ansprechen".
+  // Kleiner = direkter. Der Faktor 1/S.resp macht den Regler intuitiv:
+  // 200 % Ansprechen = halbe Zeitkonstanten.
+  const tc = x => Math.max(.005, x / S.resp);
 
   function makeNoiseBuffer(c){
     const len = c.sampleRate * 2;
@@ -345,16 +384,16 @@
       update(rpm, speed, thr, t){
         const f = rpm/60*4;                       // V8, 4-Takt → 4 Zündungen/U
         // Ohne Gänge zieht die Drehzahl träger nach → weniger nervöses Blubbern
-        const glide = S.gearsOn ? .05 : .12;
+        const glide = tc(S.gearsOn ? .02 : .05);
         fire.frequency.setTargetAtTime(f, t, glide);
         sub.frequency.setTargetAtTime(f/2, t, glide);
         harm.frequency.setTargetAtTime(f*2, t, glide);
         // Leerlauf-Lope nur mit Getriebe; im Direktantrieb läuft es glatt durch
         lopeAmt.gain.setTargetAtTime(S.gearsOn ? (rpm<1400 ? 6 : 0.5) : 0.3, t, .2);
-        body.frequency.setTargetAtTime(300 + rpm*0.55 + thr*900, t, .08);
-        nFilt.frequency.setTargetAtTime(120 + rpm*0.25, t, .1);
+        body.frequency.setTargetAtTime(300 + rpm*0.55 + thr*900, t, tc(.035));
+        nFilt.frequency.setTargetAtTime(120 + rpm*0.25, t, tc(.05));
         const load = .55 + .45*Math.min(1,thr*1.6);
-        mix.gain.setTargetAtTime(load*(.5 + .5*Math.min(1,rpm/RPM_MAX)), t, .07);
+        mix.gain.setTargetAtTime(load*(.5 + .5*Math.min(1,rpm/RPM_MAX)), t, tc(.03));
       },
       stop(){ [fire,sub,harm,lopeLfo,noise].forEach(n=>{try{n.stop()}catch(e){}}); }
     };
@@ -384,11 +423,11 @@
         const p = Math.min(1, speed/S.vmax);
         // Mit Getriebe moduliert die Turbine zusätzlich mit der Drehzahl
         const r = S.gearsOn ? (rpm/RPM_MAX) : p;
-        bp.frequency.setTargetAtTime(280 + 2400*p, t, .15);
-        whine.frequency.setTargetAtTime(500 + 2000*p + 1200*r + thr*400, t, .12);
-        gWhine.gain.setTargetAtTime(.02 + .06*r, t, .15);
-        gHiss.gain.setTargetAtTime(.05 + .3*p + .2*thr, t, .12);
-        mix.gain.setTargetAtTime(.35 + .65*Math.max(p, thr*.5), t, .12);
+        bp.frequency.setTargetAtTime(280 + 2400*p, t, tc(.07));
+        whine.frequency.setTargetAtTime(500 + 2000*p + 1200*r + thr*400, t, tc(.05));
+        gWhine.gain.setTargetAtTime(.02 + .06*r, t, tc(.07));
+        gHiss.gain.setTargetAtTime(.05 + .3*p + .2*thr, t, tc(.05));
+        mix.gain.setTargetAtTime(.35 + .65*Math.max(p, thr*.5), t, tc(.05));
       },
       stop(){ try{noise.stop()}catch(e){} try{whine.stop()}catch(e){} }
     };
@@ -425,13 +464,13 @@
         // ohne Getriebe: ein durchgehender Anstieg mit dem Tempo.
         const drive = S.gearsOn ? (rpm/RPM_MAX) : p;
         const base=55 + 320*drive;
-        o1.frequency.setTargetAtTime(base, t, .12);
-        o2.frequency.setTargetAtTime(base*1.5, t, .12);
-        o3.frequency.setTargetAtTime(base*4, t, .12);
-        filt.frequency.setTargetAtTime(600 + 3000*drive + thr*1500, t, .12);
+        o1.frequency.setTargetAtTime(base, t, tc(.05));
+        o2.frequency.setTargetAtTime(base*1.5, t, tc(.05));
+        o3.frequency.setTargetAtTime(base*4, t, tc(.05));
+        filt.frequency.setTargetAtTime(600 + 3000*drive + thr*1500, t, tc(.05));
         shFilt.frequency.setTargetAtTime(3000 + 4000*p, t, .2);
         gSh.gain.setTargetAtTime(.01+.05*p, t, .2);
-        mix.gain.setTargetAtTime(.3 + .7*Math.max(p*.9, thr*.4), t, .12);
+        mix.gain.setTargetAtTime(.3 + .7*Math.max(p*.9, thr*.4), t, tc(.05));
       },
       stop(){ [o1,o2,o3,vib,shimmer].forEach(n=>{try{n.stop()}catch(e){}}); }
     };
@@ -465,14 +504,14 @@
     return {
       update(rpm, speed, thr, t){
         const f=rpm/60*3;                     // 6 Zylinder, 4-Takt
-        const glide = S.gearsOn ? .04 : .1;
+        const glide = tc(S.gearsOn ? .018 : .045);
         fire.frequency.setTargetAtTime(f,t,glide);
         fire2.frequency.setTargetAtTime(f,t,glide);
         sub.frequency.setTargetAtTime(f/2,t,glide);
-        rFilt.frequency.setTargetAtTime(700+rpm*.28,t,.08);
-        gR.gain.setTargetAtTime(.05+.25*thr+.1*(rpm/RPM_MAX),t,.08);
-        body.frequency.setTargetAtTime(500+rpm*.9+thr*1200,t,.06);
-        mix.gain.setTargetAtTime(.45+.55*Math.min(1,(rpm/RPM_MAX)*.7+thr*.5),t,.06);
+        rFilt.frequency.setTargetAtTime(700+rpm*.28,t,tc(.035));
+        gR.gain.setTargetAtTime(.05+.25*thr+.1*(rpm/RPM_MAX),t,tc(.035));
+        body.frequency.setTargetAtTime(500+rpm*.9+thr*1200,t,tc(.028));
+        mix.gain.setTargetAtTime(.45+.55*Math.min(1,(rpm/RPM_MAX)*.7+thr*.5),t,tc(.028));
       },
       stop(){ [fire,fire2,sub,rasp].forEach(n=>{try{n.stop()}catch(e){}}); }
     };
@@ -518,14 +557,14 @@
     return {
       update(rpm, speed, thr, t){
         const f=rpm/60*2;                     // 4 Zylinder, 4-Takt
-        const glide = S.gearsOn ? .05 : .12;
+        const glide = tc(S.gearsOn ? .02 : .05);
         fire.frequency.setTargetAtTime(f,t,glide);
         sq.frequency.setTargetAtTime(f*2,t,glide);
         sub.frequency.setTargetAtTime(f/2,t,glide);
-        whis.frequency.setTargetAtTime(900+rpm*1.15+thr*800,t,.1);
-        gW.gain.setTargetAtTime(.02+.09*thr*(rpm/RPM_MAX),t,.1);
-        body.frequency.setTargetAtTime(380+rpm*.6+thr*1000,t,.07);
-        mix.gain.setTargetAtTime(.5+.5*Math.min(1,rpm/RPM_MAX+thr*.4),t,.07);
+        whis.frequency.setTargetAtTime(900+rpm*1.15+thr*800,t,tc(.045));
+        gW.gain.setTargetAtTime(.02+.09*thr*(rpm/RPM_MAX),t,tc(.045));
+        body.frequency.setTargetAtTime(380+rpm*.6+thr*1000,t,tc(.03));
+        mix.gain.setTargetAtTime(.5+.5*Math.min(1,rpm/RPM_MAX+thr*.4),t,tc(.03));
         if(lastThr-thr>.22 && speed>15 && t-lastBov>1.2){ bov(t); lastBov=t; }
         lastThr+=(thr-lastThr)*.5;
       },
@@ -566,14 +605,14 @@
       update(rpm, speed, thr, t){
         const r=rpm*1.9;                      // Formel-Drehzahlen
         const f=r/60*5;                       // 10 Zylinder, 4-Takt
-        const glide = S.gearsOn ? .035 : .09;
+        const glide = tc(S.gearsOn ? .015 : .04);
         o1.frequency.setTargetAtTime(f,t,glide);
         o2.frequency.setTargetAtTime(f,t,glide);
         o3.frequency.setTargetAtTime(f*.5,t,glide);
-        ringOsc.frequency.setTargetAtTime(f*1.98,t,.05);
-        scream.frequency.setTargetAtTime(1500+r*.35,t,.08);
-        body.frequency.setTargetAtTime(1200+r*.5+thr*1500,t,.06);
-        mix.gain.setTargetAtTime(.4+.6*Math.min(1,r/(RPM_MAX*1.9)+thr*.3),t,.06);
+        ringOsc.frequency.setTargetAtTime(f*1.98,t,tc(.02));
+        scream.frequency.setTargetAtTime(1500+r*.35,t,tc(.035));
+        body.frequency.setTargetAtTime(1200+r*.5+thr*1500,t,tc(.028));
+        mix.gain.setTargetAtTime(.4+.6*Math.min(1,r/(RPM_MAX*1.9)+thr*.3),t,tc(.028));
       },
       stop(){ [o1,o2,o3,ringOsc].forEach(n=>{try{n.stop()}catch(e){}}); }
     };
@@ -623,24 +662,23 @@
         // Schalten zurück; ohne Getriebe steigt er linear mit dem Tempo.
         const drive = S.gearsOn ? (rpm/RPM_MAX) : p;
         const base=45+180*drive;
-        car.frequency.setTargetAtTime(base,t,.15);
-        sub.frequency.setTargetAtTime(base/2,t,.15);
-        fm.frequency.setTargetAtTime(base*2.01,t,.15);
-        fmAmt.gain.setTargetAtTime(20+120*drive+80*thr,t,.15);
-        lfo.frequency.setTargetAtTime(1.4+14*drive+3*thr,t,.2);      // Puls-Tempo
-        lfoAmt.gain.setTargetAtTime(.42-.22*p,t,.3);                 // Puls glättet sich
-        filt.frequency.setTargetAtTime(320+2600*drive+1200*thr,t,.12);
+        car.frequency.setTargetAtTime(base,t,tc(.06));
+        sub.frequency.setTargetAtTime(base/2,t,tc(.06));
+        fm.frequency.setTargetAtTime(base*2.01,t,tc(.06));
+        fmAmt.gain.setTargetAtTime(20+120*drive+80*thr,t,tc(.06));
+        lfo.frequency.setTargetAtTime(1.4+14*drive+3*thr,t,tc(.09));      // Puls-Tempo
+        lfoAmt.gain.setTargetAtTime(.42-.22*p,t,.3);                      // Puls glättet sich
+        filt.frequency.setTargetAtTime(320+2600*drive+1200*thr,t,tc(.05));
         shim.frequency.setTargetAtTime(2800+2600*p,t,.2);
         gShim.gain.setTargetAtTime(.008+.03*p,t,.2);
-        mix.gain.setTargetAtTime(.35+.65*Math.max(p*.9,thr*.4),t,.12);
+        mix.gain.setTargetAtTime(.35+.65*Math.max(p*.9,thr*.4),t,tc(.05));
       },
       stop(){ [car,sub,fm,lfo,shim,shimVib].forEach(n=>{try{n.stop()}catch(e){}}); }
     };
   }
 
   /* ---- Calm: warmer Ambient-Teppich fürs entspannte Cruisen.
-          Ein leiser Akkord (Grundton + Quinte + Oktave), der mit dem
-          Tempo sanft heller wird, plus weiches "Fahrtwind"-Rauschen ---- */
+          Bewusst träge — hier wird nicht nachgeschärft. ---- */
   function buildCalm(c, out){
     const o1=c.createOscillator(); o1.type="sine";       // Grundton
     const o2=c.createOscillator(); o2.type="sine";       // Quinte
@@ -672,8 +710,6 @@
     return {
       update(rpm, speed, thr, t){
         const p=Math.min(1, speed/S.vmax);
-        // Calm bleibt bewusst tempo-geführt — mit Getriebe nur ein Hauch
-        // Drehzahl-Färbung, damit das Gleiten nicht zerhackt wird.
         const drive = S.gearsOn ? (p*.7 + (rpm/RPM_MAX)*.3) : p;
         const base=60+70*drive;                        // bleibt tief & ruhig
         o1.frequency.setTargetAtTime(base,t,.4);
@@ -720,7 +756,7 @@
   async function startAudio(){
     unlockIosAudio();
     if(!ctx){
-      ctx = new (window.AudioContext||window.webkitAudioContext)();
+      ctx = new (window.AudioContext||window.webkitAudioContext)({latencyHint:"interactive"});
       master = ctx.createGain();
       engineBus = ctx.createGain();          // hier greift der Schalt-Unterbrecher
       engineBus.gain.value = 1;
@@ -778,24 +814,91 @@
     if(up && engine && engine.shift) engine.shift(t+0.05);   // Turbo: Pssh
   }
 
+  /* ============ Bewegungssensor (DeviceMotion, ~60 Hz) ============
+     GPS liefert 1 Fix/s — viel zu träge für den Lastwechsel. Der
+     Beschleunigungssensor läuft zwei Größenordnungen schneller und gibt
+     den "Tritt in den Rücken" ohne spürbare Verzögerung.
+     Da wir die Handy-Ausrichtung nicht kennen, filtern wir pro Achse
+     den Ruheanteil (Schwerkraft/Halterung) per Hochpass heraus und
+     nehmen den Betrag des verbleibenden Vektors als Last-Signal. */
+  function onMotion(e){
+    const a = e.acceleration && e.acceleration.x!=null ? e.acceleration : e.accelerationIncludingGravity;
+    if(!a || a.x==null) return;
+    const b=S.motionBias, k=0.02;            // sehr langsamer Mittelwert = "Ruhelage"
+    b.x += ((a.x||0)-b.x)*k;
+    b.y += ((a.y||0)-b.y)*k;
+    b.z += ((a.z||0)-b.z)*k;
+    const dx=(a.x||0)-b.x, dy=(a.y||0)-b.y, dz=(a.z||0)-b.z;
+    const mag=Math.sqrt(dx*dx+dy*dy+dz*dz);
+    // schnelle Glättung (~60 ms) — nimmt Fahrbahn-Rappeln raus,
+    // lässt den Lastwechsel aber sofort durch
+    S.motionMag += (mag - S.motionMag)*0.25;
+    if(!S.motionOn){ S.motionOn=true; renderSensorUi(); }
+    S.motionSeen=performance.now();
+  }
+
+  async function startMotion(){
+    // iOS 13+: Erlaubnis muss aus einer Nutzer-Geste heraus kommen
+    try{
+      const DM=window.DeviceMotionEvent;
+      if(!DM) { renderSensorUi(); return; }
+      if(typeof DM.requestPermission === "function"){
+        const res = await DM.requestPermission();
+        if(res!=="granted"){ S.motionOn=false; renderSensorUi("verweigert"); return; }
+      }
+      window.addEventListener("devicemotion", onMotion);
+    }catch(e){ renderSensorUi("nicht verfügbar"); }
+  }
+  function stopMotion(){
+    window.removeEventListener("devicemotion", onMotion);
+    S.motionOn=false; S.motionMag=0; renderSensorUi();
+  }
+  function renderSensorUi(note){
+    el.sensorLine.classList.toggle("on", S.motionOn);
+    el.sensorTxt.textContent = "Bewegungssensor: " + (note || (S.motionOn ? "aktiv" : "aus"));
+  }
+
   /* ============ Fahrphysik / Loop ============ */
   let lastT = performance.now();
   function loop(now){
     const dt = Math.min(.1,(now-lastT)/1000); lastT=now;
+    const R = S.resp;                       // Ansprech-Faktor
 
     if(S.running){
       // Demo-Modus: Pedal beschleunigt, sonst rollt's aus
       if(S.mode==="demo"){
         if(S.pedalDown) S.targetSpeed = Math.min(S.vmax, S.targetSpeed + 34*dt);
         else            S.targetSpeed = Math.max(0, S.targetSpeed - 22*dt);
+      }else if(S.gpsTs){
+        // GPS-Modus: zwischen den Fixes vorausrechnen, statt zu warten.
+        // Das schließt die Sekundenlücke, in der der Sound sonst "steht".
+        const age = Math.min(EXTRAP_MAX, (now - S.gpsTs)/1000);
+        const pred = S.gpsSpeed + S.gpsAccel*age;
+        S.targetSpeed = Math.max(0, Math.min(400, pred));
       }
+
       const prev = S.speed;
-      S.speed += (S.targetSpeed - S.speed) * Math.min(1, dt*3.5);
+      // deutlich straffere Nachführung (vorher dt*3.5 ≈ 285 ms Zeitkonstante)
+      S.speed += (S.targetSpeed - S.speed) * Math.min(1, dt*9*R);
       if(S.speed<0.3 && S.targetSpeed<0.3) S.speed=0;
 
       const rawAccel = (S.speed - prev)/Math.max(dt,.001);
-      S.accel += (rawAccel - S.accel)*Math.min(1,dt*4);
-      const throttle = Math.max(0, Math.min(1, S.accel/14 + (S.pedalDown?.35:0)));
+      S.accel += (rawAccel - S.accel)*Math.min(1,dt*8*R);
+
+      /* --- Throttle: Sensor schlägt GPS ---
+         Im GPS-Modus ist die aus der Geschwindigkeit abgeleitete Last
+         prinzipbedingt ~1 s zu spät. Liegt ein Bewegungssensor an, führt
+         der. Beim Bremsen (GPS-Verzögerung) dämpfen wir ihn, sonst würde
+         der Motor beim Ankern aufheulen. */
+      let throttle = Math.max(0, Math.min(1, S.accel/14 + (S.pedalDown?.35:0)));
+      if(S.mode==="gps" && S.motionOn){
+        const braking = S.gpsAccel < -2.5 ? .18 : 1;
+        const mThr = Math.min(1, (S.motionMag/2.6) * braking);
+        throttle = Math.max(throttle, mThr);
+        el.gBar.style.width = (Math.min(1,S.motionMag/3)*100).toFixed(0)+"%";
+      }
+      // Sensor eingeschlafen? (manche Browser stoppen im Hintergrund)
+      if(S.motionOn && now - S.motionSeen > 2000){ S.motionOn=false; renderSensorUi(); }
 
       // Gang & Drehzahl
       const prevGear = S.gear;
@@ -808,7 +911,7 @@
         const [lo,hi]=GEARS[gi];
         const frac=(S.speed-lo)/(hi-lo);
         const target = RPM_SHIFT_LOW + frac*(RPM_MAX-800-RPM_SHIFT_LOW) + throttle*500;
-        S.rpm += (target - S.rpm)*Math.min(1,dt*5);
+        S.rpm += (target - S.rpm)*Math.min(1,dt*11*R);       // vorher dt*5
         if(prevGear>0 && S.gear!==prevGear) shiftCut(S.gear>prevGear);
       }else{
         // Direktantrieb: ein einziges "Gang"-Verhältnis über den ganzen
@@ -816,7 +919,7 @@
         S.gear=-1;
         const p = Math.min(1, S.speed/S.vmax);
         const target = RPM_IDLE + p*(RPM_MAX-400-RPM_IDLE) + throttle*300;
-        S.rpm += (target - S.rpm)*Math.min(1,dt*2.4);
+        S.rpm += (target - S.rpm)*Math.min(1,dt*6*R);        // vorher dt*2.4
       }
       S.rpm = Math.max(RPM_IDLE*.9, Math.min(RPM_MAX, S.rpm));
 
@@ -853,24 +956,37 @@
         kmh = pos.coords.speed*3.6;
       }else if(S.lastPos){
         const dtS=(pos.timestamp-S.lastPos.ts)/1000;
-        if(dtS>0.4){
+        if(dtS>0.2){
           kmh = haversine(S.lastPos.c,pos.coords)/dtS*3.6;
         }
       }
       S.lastPos={c:{latitude:pos.coords.latitude,longitude:pos.coords.longitude},ts:pos.timestamp};
       if(kmh!=null){
         if(kmh<1.5) kmh=0;               // GPS-Rauschen im Stand
-        S.targetSpeed=Math.min(kmh, 400);
+        kmh = Math.min(kmh, 400);
+        const now = performance.now();
+        // Beschleunigung aus zwei Fixes ableiten — Basis fürs Vorausrechnen
+        if(S.gpsTs){
+          const dtS=(now-S.gpsTs)/1000;
+          if(dtS>0.2 && dtS<3){
+            const a=(kmh-S.gpsSpeed)/dtS;                  // km/h pro s
+            S.gpsAccel += (Math.max(-30,Math.min(30,a)) - S.gpsAccel)*0.65;
+          }else{
+            S.gpsAccel=0;                                   // Lücke → nicht raten
+          }
+        }
+        S.gpsSpeed=kmh; S.gpsTs=now;
+        if(kmh===0) S.gpsAccel=0;
         setStatus("live","GPS aktiv · ±"+Math.round(pos.coords.accuracy)+" m");
       }
     }, err=>{
       setStatus("err", err.code===1 ? "Standort verweigert" : "GPS-Fehler");
-    }, {enableHighAccuracy:true, maximumAge:500, timeout:15000});
+    }, {enableHighAccuracy:true, maximumAge:0, timeout:15000});
   }
 
   function stopGps(){
     if(S.watchId!=null){ navigator.geolocation.clearWatch(S.watchId); S.watchId=null; }
-    S.lastPos=null;
+    S.lastPos=null; S.gpsTs=0; S.gpsSpeed=0; S.gpsAccel=0;
   }
 
   async function requestWakeLock(){
@@ -891,10 +1007,10 @@
       requestWakeLock();
       el.startBtn.textContent="Stopp";
       el.startBtn.classList.add("on");
-      if(S.mode==="gps") startGps();
+      if(S.mode==="gps"){ startGps(); startMotion(); }   // Permission in der Geste
       else setStatus("live","Demo läuft");
     }else{
-      stopAudio(); stopGps(); releaseWakeLock();
+      stopAudio(); stopGps(); stopMotion(); releaseWakeLock();
       S.targetSpeed=0;
       el.startBtn.textContent="Start";
       el.startBtn.classList.remove("on");
@@ -944,10 +1060,11 @@
     el.modeGps.classList.toggle("active",m==="gps");
     el.demoPanel.style.display=m==="demo"?"":"none";
     el.gpsPanel.style.display=m==="gps"?"":"none";
-    stopGps();
+    stopGps(); stopMotion();
     S.targetSpeed=0;
     if(S.running){
-      if(m==="gps") startGps(); else setStatus("live","Demo läuft");
+      if(m==="gps"){ startGps(); startMotion(); }
+      else setStatus("live","Demo läuft");
     }
   }
   el.modeDemo.addEventListener("click",()=>setMode("demo"));
@@ -971,6 +1088,10 @@
   el.vmax.addEventListener("input",()=>{
     S.vmax=+el.vmax.value;
     el.vmaxOut.textContent=el.vmax.value;
+  });
+  el.resp.addEventListener("input",()=>{
+    S.resp=el.resp.value/100;
+    el.respOut.textContent=el.resp.value+"%";
   });
 
   document.addEventListener("visibilitychange",()=>{
