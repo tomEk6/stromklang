@@ -75,6 +75,19 @@
   }
   .mode-btn.active{background:#171A20;color:#FFFFFF}
 
+  /* Gangschaltung-Schalter */
+  .gearrow{margin:0 0 12px}
+  .toggle-btn{
+    width:100%;display:flex;align-items:center;justify-content:space-between;gap:10px;
+    border:1px solid var(--line);background:#FFFFFF;color:var(--text);
+    border-radius:8px;padding:11px 12px;cursor:pointer;
+    font-family:"Inter",sans-serif;font-size:13px;font-weight:500;transition:all .15s;
+  }
+  .toggle-btn .state{font-size:11.5px;font-weight:600;letter-spacing:.16em;text-transform:uppercase;color:var(--dim)}
+  .toggle-btn.on{border-color:var(--amber)}
+  .toggle-btn.on .state{color:var(--amber)}
+  .toggle-hint{font-size:12px;color:var(--dim);line-height:1.5;margin-top:7px;padding:0 2px}
+
   .pedal{
     width:100%;height:88px;border-radius:10px;border:1px solid var(--line);
     background:#FFFFFF;color:var(--dim);
@@ -162,6 +175,17 @@
       <button class="mode-btn active" id="modeDemo">🎮 Demo-Pedal</button>
       <button class="mode-btn" id="modeGps">📡 GPS (echte Fahrt)</button>
     </div>
+
+    <div class="gearrow">
+      <button class="toggle-btn on" id="gearToggle" aria-pressed="true">
+        <span>⚙️ Gangschaltung</span><span class="state" id="gearState">An</span>
+      </button>
+      <p class="toggle-hint" id="gearHint">
+        6 virtuelle Gänge: Drehzahl steigt im Gang an, fällt beim Hochschalten
+        ab — inklusive kurzem Zugkraft-Unterbrecher im Sound.
+      </p>
+    </div>
+
     <div id="demoPanel">
       <button class="pedal" id="pedal">Gas halten</button>
     </div>
@@ -206,12 +230,13 @@
   const S = {
     running:false,
     mode:"demo",            // demo | gps
-    sound:"v8",             // v8 | jet | warp
+    sound:"v8",             // v8 | jet | warp | ...
+    gearsOn:true,           // virtuelle Gangschaltung an/aus
     targetSpeed:0,          // km/h
     speed:0,                // smoothed km/h
     accel:0,                // km/h per second (smoothed)
     rpm:900,
-    gear:0,                 // 0 = N
+    gear:0,                 // 0 = N, -1 = D (Direktantrieb)
     vmax:160,
     volume:0.7,
     pedalDown:false,
@@ -233,6 +258,7 @@
     startBtn:$("startBtn"), pedal:$("pedal"),
     chips:$("chips"), modeDemo:$("modeDemo"), modeGps:$("modeGps"),
     demoPanel:$("demoPanel"), gpsPanel:$("gpsPanel"),
+    gearToggle:$("gearToggle"), gearState:$("gearState"), gearHint:$("gearHint"),
     vol:$("vol"), volOut:$("volOut"), vmax:$("vmax"), vmaxOut:$("vmaxOut"),
   };
 
@@ -260,7 +286,7 @@
   }
 
   /* ============ Audio-Engine ============ */
-  let ctx=null, master=null, engine=null;
+  let ctx=null, master=null, engineBus=null, engine=null;
 
   function makeNoiseBuffer(c){
     const len = c.sampleRate * 2;
@@ -318,10 +344,13 @@
     return {
       update(rpm, speed, thr, t){
         const f = rpm/60*4;                       // V8, 4-Takt → 4 Zündungen/U
-        fire.frequency.setTargetAtTime(f, t, .05);
-        sub.frequency.setTargetAtTime(f/2, t, .05);
-        harm.frequency.setTargetAtTime(f*2, t, .05);
-        lopeAmt.gain.setTargetAtTime(rpm<1400 ? 6 : 0.5, t, .2);
+        // Ohne Gänge zieht die Drehzahl träger nach → weniger nervöses Blubbern
+        const glide = S.gearsOn ? .05 : .12;
+        fire.frequency.setTargetAtTime(f, t, glide);
+        sub.frequency.setTargetAtTime(f/2, t, glide);
+        harm.frequency.setTargetAtTime(f*2, t, glide);
+        // Leerlauf-Lope nur mit Getriebe; im Direktantrieb läuft es glatt durch
+        lopeAmt.gain.setTargetAtTime(S.gearsOn ? (rpm<1400 ? 6 : 0.5) : 0.3, t, .2);
         body.frequency.setTargetAtTime(300 + rpm*0.55 + thr*900, t, .08);
         nFilt.frequency.setTargetAtTime(120 + rpm*0.25, t, .1);
         const load = .55 + .45*Math.min(1,thr*1.6);
@@ -353,9 +382,11 @@
     return {
       update(rpm, speed, thr, t){
         const p = Math.min(1, speed/S.vmax);
+        // Mit Getriebe moduliert die Turbine zusätzlich mit der Drehzahl
+        const r = S.gearsOn ? (rpm/RPM_MAX) : p;
         bp.frequency.setTargetAtTime(280 + 2400*p, t, .15);
-        whine.frequency.setTargetAtTime(500 + 3200*p + thr*400, t, .12);
-        gWhine.gain.setTargetAtTime(.02 + .06*p, t, .15);
+        whine.frequency.setTargetAtTime(500 + 2000*p + 1200*r + thr*400, t, .12);
+        gWhine.gain.setTargetAtTime(.02 + .06*r, t, .15);
         gHiss.gain.setTargetAtTime(.05 + .3*p + .2*thr, t, .12);
         mix.gain.setTargetAtTime(.35 + .65*Math.max(p, thr*.5), t, .12);
       },
@@ -390,11 +421,14 @@
     return {
       update(rpm, speed, thr, t){
         const p=Math.min(1, speed/S.vmax);
-        const base=55 + 320*p;
+        // Mit Getriebe: Tonhöhe folgt der Drehzahl (Warp-"Gänge"),
+        // ohne Getriebe: ein durchgehender Anstieg mit dem Tempo.
+        const drive = S.gearsOn ? (rpm/RPM_MAX) : p;
+        const base=55 + 320*drive;
         o1.frequency.setTargetAtTime(base, t, .12);
         o2.frequency.setTargetAtTime(base*1.5, t, .12);
         o3.frequency.setTargetAtTime(base*4, t, .12);
-        filt.frequency.setTargetAtTime(600 + 3000*p + thr*1500, t, .12);
+        filt.frequency.setTargetAtTime(600 + 3000*drive + thr*1500, t, .12);
         shFilt.frequency.setTargetAtTime(3000 + 4000*p, t, .2);
         gSh.gain.setTargetAtTime(.01+.05*p, t, .2);
         mix.gain.setTargetAtTime(.3 + .7*Math.max(p*.9, thr*.4), t, .12);
@@ -431,9 +465,10 @@
     return {
       update(rpm, speed, thr, t){
         const f=rpm/60*3;                     // 6 Zylinder, 4-Takt
-        fire.frequency.setTargetAtTime(f,t,.04);
-        fire2.frequency.setTargetAtTime(f,t,.04);
-        sub.frequency.setTargetAtTime(f/2,t,.04);
+        const glide = S.gearsOn ? .04 : .1;
+        fire.frequency.setTargetAtTime(f,t,glide);
+        fire2.frequency.setTargetAtTime(f,t,glide);
+        sub.frequency.setTargetAtTime(f/2,t,glide);
         rFilt.frequency.setTargetAtTime(700+rpm*.28,t,.08);
         gR.gain.setTargetAtTime(.05+.25*thr+.1*(rpm/RPM_MAX),t,.08);
         body.frequency.setTargetAtTime(500+rpm*.9+thr*1200,t,.06);
@@ -483,9 +518,10 @@
     return {
       update(rpm, speed, thr, t){
         const f=rpm/60*2;                     // 4 Zylinder, 4-Takt
-        fire.frequency.setTargetAtTime(f,t,.05);
-        sq.frequency.setTargetAtTime(f*2,t,.05);
-        sub.frequency.setTargetAtTime(f/2,t,.05);
+        const glide = S.gearsOn ? .05 : .12;
+        fire.frequency.setTargetAtTime(f,t,glide);
+        sq.frequency.setTargetAtTime(f*2,t,glide);
+        sub.frequency.setTargetAtTime(f/2,t,glide);
         whis.frequency.setTargetAtTime(900+rpm*1.15+thr*800,t,.1);
         gW.gain.setTargetAtTime(.02+.09*thr*(rpm/RPM_MAX),t,.1);
         body.frequency.setTargetAtTime(380+rpm*.6+thr*1000,t,.07);
@@ -493,6 +529,8 @@
         if(lastThr-thr>.22 && speed>15 && t-lastBov>1.2){ bov(t); lastBov=t; }
         lastThr+=(thr-lastThr)*.5;
       },
+      // Blow-off beim Hochschalten (nur mit Getriebe)
+      shift(t){ if(t-lastBov>.4){ bov(t); lastBov=t; } },
       stop(){ [fire,sq,sub,whis].forEach(n=>{try{n.stop()}catch(e){}}); }
     };
   }
@@ -528,9 +566,10 @@
       update(rpm, speed, thr, t){
         const r=rpm*1.9;                      // Formel-Drehzahlen
         const f=r/60*5;                       // 10 Zylinder, 4-Takt
-        o1.frequency.setTargetAtTime(f,t,.035);
-        o2.frequency.setTargetAtTime(f,t,.035);
-        o3.frequency.setTargetAtTime(f*.5,t,.035);
+        const glide = S.gearsOn ? .035 : .09;
+        o1.frequency.setTargetAtTime(f,t,glide);
+        o2.frequency.setTargetAtTime(f,t,glide);
+        o3.frequency.setTargetAtTime(f*.5,t,glide);
         ringOsc.frequency.setTargetAtTime(f*1.98,t,.05);
         scream.frequency.setTargetAtTime(1500+r*.35,t,.08);
         body.frequency.setTargetAtTime(1200+r*.5+thr*1500,t,.06);
@@ -580,14 +619,17 @@
     return {
       update(rpm, speed, thr, t){
         const p=Math.min(1, speed/S.vmax);
-        const base=45+180*p;
+        // Mit Getriebe wird der Puls pro Gang schneller und fällt beim
+        // Schalten zurück; ohne Getriebe steigt er linear mit dem Tempo.
+        const drive = S.gearsOn ? (rpm/RPM_MAX) : p;
+        const base=45+180*drive;
         car.frequency.setTargetAtTime(base,t,.15);
         sub.frequency.setTargetAtTime(base/2,t,.15);
         fm.frequency.setTargetAtTime(base*2.01,t,.15);
-        fmAmt.gain.setTargetAtTime(20+120*p+80*thr,t,.15);
-        lfo.frequency.setTargetAtTime(1.4+14*p+3*thr,t,.2);      // Puls-Tempo
-        lfoAmt.gain.setTargetAtTime(.42-.22*p,t,.3);             // Puls glättet sich
-        filt.frequency.setTargetAtTime(320+2600*p+1200*thr,t,.12);
+        fmAmt.gain.setTargetAtTime(20+120*drive+80*thr,t,.15);
+        lfo.frequency.setTargetAtTime(1.4+14*drive+3*thr,t,.2);      // Puls-Tempo
+        lfoAmt.gain.setTargetAtTime(.42-.22*p,t,.3);                 // Puls glättet sich
+        filt.frequency.setTargetAtTime(320+2600*drive+1200*thr,t,.12);
         shim.frequency.setTargetAtTime(2800+2600*p,t,.2);
         gShim.gain.setTargetAtTime(.008+.03*p,t,.2);
         mix.gain.setTargetAtTime(.35+.65*Math.max(p*.9,thr*.4),t,.12);
@@ -630,11 +672,14 @@
     return {
       update(rpm, speed, thr, t){
         const p=Math.min(1, speed/S.vmax);
-        const base=60+70*p;                            // bleibt tief & ruhig
+        // Calm bleibt bewusst tempo-geführt — mit Getriebe nur ein Hauch
+        // Drehzahl-Färbung, damit das Gleiten nicht zerhackt wird.
+        const drive = S.gearsOn ? (p*.7 + (rpm/RPM_MAX)*.3) : p;
+        const base=60+70*drive;                        // bleibt tief & ruhig
         o1.frequency.setTargetAtTime(base,t,.4);
         o2.frequency.setTargetAtTime(base*1.5,t,.4);
         o3.frequency.setTargetAtTime(base*2,t,.4);
-        filt.frequency.setTargetAtTime(550+900*p+300*thr,t,.5);
+        filt.frequency.setTargetAtTime(550+900*drive+300*thr,t,.5);
         wFilt.frequency.setTargetAtTime(400+900*p,t,.5);
         gW.gain.setTargetAtTime(.02+.06*p,t,.5);
         mix.gain.setTargetAtTime(.3+.4*p,t,.4);        // träge, nie aufdringlich
@@ -644,6 +689,9 @@
   }
 
   const BUILDERS = { v8:buildV8, boxer:buildBoxer, turbo:buildTurbo, v10:buildV10, jet:buildJet, warp:buildWarp, ion:buildIon, calm:buildCalm };
+
+  // Sounds, die auch ohne Getriebe stimmig sind (rein tempo-geführt)
+  const SMOOTH_SOUNDS = new Set(["jet","warp","ion","calm"]);
 
   /* iOS-Trick: ein loopendes, stummes <audio>-Element schaltet die
      Audio-Session auf "Wiedergabe" um — dann ignoriert das iPhone den
@@ -674,6 +722,9 @@
     if(!ctx){
       ctx = new (window.AudioContext||window.webkitAudioContext)();
       master = ctx.createGain();
+      engineBus = ctx.createGain();          // hier greift der Schalt-Unterbrecher
+      engineBus.gain.value = 1;
+      engineBus.connect(master);
       const comp = ctx.createDynamicsCompressor();
       master.connect(comp); comp.connect(ctx.destination);
     }
@@ -699,13 +750,32 @@
   function swapEngine(name){
     if(!ctx) return;
     if(engine){ engine.stop(); engine=null; }
-    engine = BUILDERS[name](ctx, master);
+    engineBus.gain.cancelScheduledValues(ctx.currentTime);
+    engineBus.gain.setValueAtTime(1, ctx.currentTime);
+    engine = BUILDERS[name](ctx, engineBus);
   }
 
   function stopAudio(){
     if(engine){ engine.stop(); engine=null; }
     if(master && ctx) master.gain.setTargetAtTime(0, ctx.currentTime, .1);
     if(unlockEl) unlockEl.pause();
+  }
+
+  /* Kurze Zugkraft-Unterbrechung beim Schalten — das macht die Gänge
+     überhaupt erst hörbar. Hoch = knackiger Cut, runter = kurzes Zwischengas. */
+  function shiftCut(up){
+    if(!ctx || !engineBus) return;
+    const t=ctx.currentTime, g=engineBus.gain;
+    g.cancelScheduledValues(t);
+    g.setValueAtTime(g.value, t);
+    if(up){
+      g.linearRampToValueAtTime(0.16, t+0.045);
+      g.linearRampToValueAtTime(1.0,  t+0.22);
+    }else{
+      g.linearRampToValueAtTime(0.55, t+0.04);
+      g.linearRampToValueAtTime(1.0,  t+0.16);
+    }
+    if(up && engine && engine.shift) engine.shift(t+0.05);   // Turbo: Pssh
   }
 
   /* ============ Fahrphysik / Loop ============ */
@@ -728,8 +798,10 @@
       const throttle = Math.max(0, Math.min(1, S.accel/14 + (S.pedalDown?.35:0)));
 
       // Gang & Drehzahl
-      if(S.speed<1){ S.gear=0; S.rpm += (RPM_IDLE - S.rpm)*dt*4; }
-      else{
+      const prevGear = S.gear;
+      if(S.speed<1){
+        S.gear=0; S.rpm += (RPM_IDLE - S.rpm)*dt*4;
+      }else if(S.gearsOn){
         let gi = GEARS.findIndex(g=>S.speed>=g[0] && S.speed<g[1]);
         if(gi<0) gi=GEARS.length-1;
         S.gear=gi+1;
@@ -737,6 +809,14 @@
         const frac=(S.speed-lo)/(hi-lo);
         const target = RPM_SHIFT_LOW + frac*(RPM_MAX-800-RPM_SHIFT_LOW) + throttle*500;
         S.rpm += (target - S.rpm)*Math.min(1,dt*5);
+        if(prevGear>0 && S.gear!==prevGear) shiftCut(S.gear>prevGear);
+      }else{
+        // Direktantrieb: ein einziges "Gang"-Verhältnis über den ganzen
+        // Bereich — die Drehzahl folgt linear dem Tempo, ohne Sprünge.
+        S.gear=-1;
+        const p = Math.min(1, S.speed/S.vmax);
+        const target = RPM_IDLE + p*(RPM_MAX-400-RPM_IDLE) + throttle*300;
+        S.rpm += (target - S.rpm)*Math.min(1,dt*2.4);
       }
       S.rpm = Math.max(RPM_IDLE*.9, Math.min(RPM_MAX, S.rpm));
 
@@ -747,7 +827,7 @@
     el.speedVal.textContent = Math.round(S.speed);
     el.rpmVal.textContent = Math.round(S.rpm/10)*10;
     el.rpmFill.style.width = (S.rpm/RPM_MAX*100).toFixed(1)+"%";
-    el.gear.textContent = S.gear===0 ? "N" : S.gear;
+    el.gear.textContent = S.gear===0 ? "N" : (S.gear===-1 ? "D" : S.gear);
     setGauge(S.speed);
 
     requestAnimationFrame(loop);
@@ -828,7 +908,35 @@
     btn.classList.add("active");
     S.sound=btn.dataset.sound;
     if(S.running) swapEngine(S.sound);
+    renderGearUi();
   });
+
+  /* ---- Gangschaltung-Schalter ---- */
+  function renderGearUi(){
+    el.gearToggle.classList.toggle("on", S.gearsOn);
+    el.gearToggle.setAttribute("aria-pressed", String(S.gearsOn));
+    el.gearState.textContent = S.gearsOn ? "An" : "Aus";
+    if(S.gearsOn){
+      el.gearHint.textContent =
+        "6 virtuelle Gänge: Drehzahl steigt im Gang an, fällt beim Hochschalten "
+        + "ab — inklusive kurzem Zugkraft-Unterbrecher im Sound.";
+    }else{
+      el.gearHint.textContent = SMOOTH_SOUNDS.has(S.sound)
+        ? "Direktantrieb wie im echten E-Auto: ein durchgehender Ton, der linear mit dem Tempo ansteigt. Genau das Element ist für diesen Sound gemacht."
+        : "Direktantrieb: der Motor zieht ohne Schaltpausen von Leerlauf bis Vollgas durch — ungewohnt für einen Verbrenner, aber genau der E-Auto-Effekt.";
+    }
+  }
+
+  el.gearToggle.addEventListener("click", ()=>{
+    S.gearsOn = !S.gearsOn;
+    renderGearUi();
+    // Unterbrecher zurücksetzen, damit kein Duck hängen bleibt
+    if(ctx && engineBus){
+      engineBus.gain.cancelScheduledValues(ctx.currentTime);
+      engineBus.gain.setTargetAtTime(1, ctx.currentTime, .05);
+    }
+  });
+  renderGearUi();
 
   function setMode(m){
     S.mode=m;
